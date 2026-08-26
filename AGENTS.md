@@ -95,9 +95,10 @@ mensinkronkan keempatnya dalam satu commit: SKILL.md itu, tipe TS, struct Go, mo
 
 ## Git
 
+- Branching model: `main` hanya menerima perubahan via **PR (squash)**; pekerjaan harian di `developer`; fitur besar memakai `feat/<topik>` → PR ke `developer`. Detail wajib-baca: skill `git-github`.
 - Conventional Commits: `feat(gateway): ...`, `fix(ai-service): ...`, `docs: ...`.
 - Jangan pernah commit: `.env`, berkas model (*.vrm, checkpoint), cache, `node_modules`.
-- Commit kecil dan fokus; branch `feat/<topik>` bila bekerja terpisah dari main.
+- Commit kecil dan fokus; jangan pernah push/merge langsung ke `main`.
 
 ## Cheat-sheet
 

@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .venv/
 dist/
+.ruff_cache/
 
 # Lingkungan & rahasia
 .env
@@ -14,20 +15,21 @@ dist/
 *.onnx
 *.gguf
 *.safetensors
+*.pth
+*.ckpt
+*.index
 *.bin
 !gateway/**/fixtures/*.bin
 hf-cache/
 ollama/
+base_models/
 
 # Build artefak
-frontend/dist/
 gateway/gateway
 gateway/bin/
+tsconfig.tsbuildinfo
 
 # OS / editor
 .DS_Store
 .idea/
 .vscode/
-tsconfig.tsbuildinfo
-
-# benchmarks/
