@@ -1,0 +1,45 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "make status": "allow",
+      "make ps": "allow",
+      "make doctor": "allow",
+      "docker compose ps": "allow",
+      "docker compose config *": "allow",
+      "go build *": "allow",
+      "go vet *": "allow",
+      "go test *": "allow",
+      "npx tsc --noEmit": "allow",
+      "npm run lint": "allow",
+      "npm run build": "allow",
+      "npx biome *": "allow",
+      "git status": "allow",
+      "git diff *": "allow",
+      "git log*": "allow"
+    }
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp"],
+      "enabled": true
+    }
+  },
+  "references": {
+    "airi": {
+      "repository": "moeru-ai/airi",
+      "description": "Blueprint arsitektur & fitur companion AI VTuber (jangan fork, pelajari polanya)"
+    },
+    "webai": {
+      "repository": "proj-airi/webai-realtime-voice-chat",
+      "description": "Referensi implementasi pipeline realtime VAD + STT + LLM + TTS"
+    },
+    "chatvrm": {
+      "repository": "pixiv/ChatVRM",
+      "description": "Referensi frontend React + three-vrm untuk chat dengan avatar VRM"
+    }
+  }
+}

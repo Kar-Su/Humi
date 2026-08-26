@@ -1,0 +1,33 @@
+# Cache & dependensi
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+dist/
+
+# Lingkungan & rahasia
+.env
+
+# Berkas model & aset berat
+*.vrm
+*.vrma
+*.onnx
+*.gguf
+*.safetensors
+*.bin
+!gateway/**/fixtures/*.bin
+hf-cache/
+ollama/
+
+# Build artefak
+frontend/dist/
+gateway/gateway
+gateway/bin/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+tsconfig.tsbuildinfo
+
+# benchmarks/

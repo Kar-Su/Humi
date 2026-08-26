@@ -1,0 +1,32 @@
+name: humi-experiment
+
+services:
+  sovits:
+    image: xxxxrt666/gpt-sovits:latest-cu126
+    container_name: humi-sovits
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9880:9880"
+    environment:
+      is_half: "False"
+    volumes:
+      - ./benchmarks/models/sovits:/workspace/models:ro
+      - ./benchmarks/models/gsv-base/gsv-v2final-pretrained:/workspace/GPT-SoVITS/GPT_SoVITS/pretrained_models/gsv-v2final-pretrained:ro
+      - ./benchmarks/models/gsv-base/chinese-roberta-wwm-ext-large:/workspace/GPT-SoVITS/GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large:ro
+      - ./benchmarks/models/gsv-base/chinese-hubert-base:/workspace/GPT-SoVITS/GPT_SoVITS/pretrained_models/chinese-hubert-base:ro
+    shm_size: "8gb"
+    working_dir: /workspace/GPT-SoVITS
+    command:
+      - python
+      - api_v2.py
+      - -a
+      - 0.0.0.0
+      - -p
+      - "9880"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

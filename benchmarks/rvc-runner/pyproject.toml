@@ -1,0 +1,20 @@
+[project]
+name = "humi-rvc-runner"
+version = "0.1.0"
+requires-python = ">=3.9,<3.11"
+dependencies = [
+    "rvc-python==0.1.5",
+    "torch>=2.0,<2.6",
+    "torchaudio>=2.0,<2.6",
+    "scipy==1.10.1",
+    "setuptools<81",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
