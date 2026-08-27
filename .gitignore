@@ -33,3 +33,4 @@ tsconfig.tsbuildinfo
 .DS_Store
 .idea/
 .vscode/
+.prereqs.log
