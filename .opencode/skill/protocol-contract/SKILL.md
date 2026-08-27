@@ -61,4 +61,6 @@ TTS mulai mengirim audio kalimat pertama tanpa menunggu kalimat berikutnya seles
 
 ## Versi
 
-- v1 (Fase 0): kontrak awal di atas, stub echo di gateway.
+- v1 (Fase 0): kontrak di atas. Implementasi nyata: ai-service/app/protocol.py,
+  gateway/internal/protocol/protocol.go, frontend/src/lib/protocol.ts — sinkron
+  lewat satu commit. Audio output: pcm16le, sample rate mengikuti engine TTS.

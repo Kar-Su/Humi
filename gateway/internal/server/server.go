@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,7 @@ func New(cfg *config.Config) *Server {
 	r := gin.New()
 	r.Use(gin.Recovery(), cors())
 	r.GET("/health", health)
-	r.GET("/ws", echo)
+	r.GET("/ws", func(c *gin.Context) { proxyWS(c, cfg) })
 
 	return &Server{
 		cfg: cfg,
@@ -55,23 +56,67 @@ func health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "gateway"})
 }
 
-func echo(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+// proxyWS me-relay dua arah antara client dan ai-service.
+func proxyWS(c *gin.Context, cfg *config.Config) {
+	client, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("upgrade: %v", err)
+		log.Printf("upgrade client: %v", err)
 		return
 	}
-	defer conn.Close()
-	for {
-		mt, msg, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("read: %v", err)
-			return
+	defer client.Close()
+
+	upstreamURL := wsURL(cfg.AIServiceURL) + "/ws/session"
+	upstream, _, err := websocket.DefaultDialer.Dial(upstreamURL, nil)
+	if err != nil {
+		log.Printf("dial ai-service: %v", err)
+		_ = client.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"ai-service tidak tersedia"}`))
+		return
+	}
+	defer upstream.Close()
+
+	done := make(chan struct{}, 2)
+
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			mt, msg, err := client.ReadMessage()
+			if err != nil {
+				_ = upstream.WriteMessage(websocket.TextMessage, []byte(`{"type":"interrupt"}`))
+				return
+			}
+			if err := upstream.WriteMessage(mt, msg); err != nil {
+				return
+			}
 		}
-		if err := conn.WriteMessage(mt, msg); err != nil {
-			log.Printf("write: %v", err)
-			return
+	}()
+
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			mt, msg, err := upstream.ReadMessage()
+			if err != nil {
+				return
+			}
+			if err := client.WriteMessage(mt, msg); err != nil {
+				return
+			}
 		}
+	}()
+
+	<-done
+	client.Close()
+	upstream.Close()
+	<-done
+}
+
+func wsURL(base string) string {
+	switch {
+	case strings.HasPrefix(base, "http://"):
+		return "ws://" + strings.TrimPrefix(base, "http://")
+	case strings.HasPrefix(base, "https://"):
+		return "wss://" + strings.TrimPrefix(base, "https://")
+	default:
+		return "ws://" + base
 	}
 }
 
