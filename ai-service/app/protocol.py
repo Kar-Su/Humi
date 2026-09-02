@@ -49,6 +49,12 @@ def pack_audio(seq: int, payload: bytes) -> bytes:
 
 
 def unpack_audio(frame: bytes) -> tuple[int, bytes]:
+    if len(frame) < HEADER_BYTES:
+        raise ValueError(f"truncated header: got {len(frame)} bytes, need {HEADER_BYTES}")
     seq, length = _HEADER.unpack_from(frame)
+    if len(frame) < HEADER_BYTES + length:
+        raise ValueError(  # noqa: E501
+            f"truncated payload: header claims {length} bytes, frame has {len(frame) - HEADER_BYTES}"  # noqa: E501
+        )
     payload = frame[HEADER_BYTES : HEADER_BYTES + length]
     return seq, payload

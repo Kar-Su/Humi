@@ -3,7 +3,10 @@
 // dan frontend/src/lib/protocol.ts. Ubah SEMUA dalam satu commit.
 package protocol
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 // Tipe pesan client -> server.
 const (
@@ -44,4 +47,28 @@ func PackAudio(seq uint32, payload []byte) []byte {
 	binary.LittleEndian.PutUint32(frame[4:8], uint32(len(payload)))
 	copy(frame[HeaderBytes:], payload)
 	return frame
+}
+
+// UnpackAudio mengurai frame biner. Validasi truncated header/payload.
+func UnpackAudio(frame []byte) (uint32, []byte, error) {
+	if len(frame) < HeaderBytes {
+		return 0, nil, fmt.Errorf("truncated header: got %d bytes, need %d", len(frame), HeaderBytes)
+	}
+	seq := binary.LittleEndian.Uint32(frame[0:4])
+	length := binary.LittleEndian.Uint32(frame[4:8])
+	if len(frame) < HeaderBytes+int(length) {
+		return 0, nil, fmt.Errorf("truncated payload: header claims %d bytes, frame has %d", length, len(frame)-HeaderBytes)
+	}
+	payload := frame[HeaderBytes : HeaderBytes+int(length)]
+	return seq, payload, nil
+}
+
+// IsValidEmotion cek apakah string adalah emosi valid.
+func IsValidEmotion(e string) bool {
+	switch e {
+	case EmotionNetral, EmotionSenang, EmotionSedih, EmotionKaget, EmotionPenasaran:
+		return true
+	default:
+		return false
+	}
 }
