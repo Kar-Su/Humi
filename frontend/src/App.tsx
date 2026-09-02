@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAudioQueue } from "./hooks/useAudioQueue";
+import { useMicCapture } from "./hooks/useMicCapture";
 import type { Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
@@ -16,8 +18,14 @@ export default function App() {
   const [status, setStatus] = useState<Status>("menyambung");
   const [pesan, setPesan] = useState<Pesan[]>([]);
   const [draft, setDraft] = useState("");
+  const [rec, setRec] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const idBerikut = useRef(0);
+
+  const aq = useAudioQueue();
+  const sendJson = useCallback((s: string) => socketRef.current?.send(s), []);
+  const sendBin = useCallback((b: ArrayBuffer) => socketRef.current?.send(b), []);
+  const mic = useMicCapture(sendJson, sendBin);
 
   useEffect(() => {
     const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -26,10 +34,9 @@ export default function App() {
     socketRef.current = ws;
     ws.onopen = () => setStatus("terhubung");
     ws.onclose = () => setStatus("terputus");
-    ws.onmessage = async (event: MessageEvent) => {
+    ws.onmessage = (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
-        // ponytail: queue + AudioContext play di Fase C; sementara drop.
-        void event.data;
+        aq.onFrame(event.data as ArrayBuffer);
         return;
       }
       if (typeof event.data === "string") {
@@ -53,6 +60,12 @@ export default function App() {
               emotion: msg.emotion ?? "netral",
             },
           ]);
+        } else if (msg.type === "tts_start") {
+          aq.onTtsStart(msg.seq, msg.sample_rate);
+        } else if (msg.type === "tts_end") {
+          aq.onTtsEnd(msg.seq);
+        } else if (msg.type === "turn_end") {
+          // ponytail: scroll ke bawah di sini bila perlu
         } else if (msg.type === "error") {
           setPesan((prev) => [
             ...prev,
@@ -72,11 +85,12 @@ export default function App() {
       }
     };
     return () => ws.close();
-  }, []);
+  }, [aq]);
 
   const kirim = () => {
     const teks = draft.trim();
     if (!teks || socketRef.current?.readyState !== WebSocket.OPEN) return;
+    aq.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     socketRef.current.send(JSON.stringify({ type: "text", text: teks }));
     setDraft("");
@@ -85,21 +99,40 @@ export default function App() {
   const interupsi = () => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return;
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
+    aq.interrupt();
+  };
+
+  const mulaiRec = async () => {
+    if (status !== "terhubung" || rec) return;
+    try {
+      aq.interrupt();
+      await mic.start();
+      setRec(true);
+    } catch {
+      setPesan((prev) => [
+        ...prev,
+        { id: idBerikut.current++, kind: "ai", teks: "mic error: izin ditolak", emotion: "netral" },
+      ]);
+    }
+  };
+
+  const selesaiRec = () => {
+    if (!rec) return;
+    setRec(false);
+    mic.stop();
   };
 
   return (
     <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Humi</h1>
+        <h1 className="text-xl font-semibold">Humi {aq.isSpeaking ? "🔊" : ""}</h1>
         <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>WS: {status}</span>
       </header>
 
       <section className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
         {pesan.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            Fase 0 — kirim pesan via{" "}
-            <code className="rounded bg-neutral-800 px-1">{"{type:'text',text}"}</code>, terima{" "}
-            <code>llm_sentence</code> per kalimat.
+            Fase C — ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -137,6 +170,25 @@ export default function App() {
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
         >
           Kirim
+        </button>
+        <button
+          type="button"
+          onMouseDown={mulaiRec}
+          onMouseUp={selesaiRec}
+          onMouseLeave={selesaiRec}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            void mulaiRec();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            selesaiRec();
+          }}
+          disabled={status !== "terhubung"}
+          className={`rounded-lg px-3 py-2 text-sm disabled:opacity-50 ${rec ? "bg-red-600 text-white" : "border border-neutral-700"}`}
+          title="Tahan untuk bicara"
+        >
+          🎙
         </button>
         <button
           type="button"
