@@ -1,6 +1,250 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["AGENTS.md"],
+
+  "instructions": [
+    "AGENTS.md",
+    "/home/kar/helmi/ecc-global/.opencode/instructions/INSTRUCTIONS.md",
+    "/home/kar/helmi/ecc-global/skills/tdd-workflow/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/security-review/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/coding-standards/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/backend-patterns/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/frontend-patterns/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/e2e-testing/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/verification-loop/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/api-design/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/golang-patterns/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/python-patterns/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/fastapi-patterns/SKILL.md",
+    "/home/kar/helmi/ecc-global/skills/docker-patterns/SKILL.md"
+  ],
+
+  "skills": {
+    "paths": ["/home/kar/helmi/ecc-global/skills"]
+  },
+
+  "agent": {
+    "build": {
+      "description": "Primary coding agent for development work",
+      "mode": "primary",
+      "tools": { "write": true, "edit": true, "bash": true, "read": true, "changed-files": true }
+    },
+    "planner": {
+      "description": "Expert planning specialist for complex features and refactoring.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/planner.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "architect": {
+      "description": "Software architecture specialist for system design and technical decision-making.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/architect.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "code-reviewer": {
+      "description": "Expert code review specialist for quality, security, and maintainability.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/code-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "security-reviewer": {
+      "description": "Security vulnerability detection and remediation specialist.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/security-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": true, "edit": true }
+    },
+    "tdd-guide": {
+      "description": "Test-Driven Development specialist enforcing write-tests-first methodology.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/tdd-guide.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "build-error-resolver": {
+      "description": "Build and type error resolution specialist with minimal diffs.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/build-error-resolver.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "e2e-runner": {
+      "description": "End-to-end testing specialist using Playwright.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/e2e-runner.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "doc-updater": {
+      "description": "Documentation and codemap specialist.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/doc-updater.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "refactor-cleaner": {
+      "description": "Dead code cleanup and consolidation specialist.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/refactor-cleaner.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "go-reviewer": {
+      "description": "Expert Go code reviewer for idiomatic Go, concurrency, error handling.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/go-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "go-build-resolver": {
+      "description": "Go build, vet, and compilation error resolution specialist.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/go-build-resolver.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "python-reviewer": {
+      "description": "Expert Python code reviewer for PEP 8, type hints, security, performance.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/python-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "rust-reviewer": {
+      "description": "Expert Rust code reviewer for ownership, lifetimes, concurrency.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/rust-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "rust-build-resolver": {
+      "description": "Rust build, Cargo, and compilation error resolution specialist.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/rust-build-resolver.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "loop-operator": {
+      "description": "Operate autonomous agent loops, monitor progress, intervene when stalled.",
+      "mode": "subagent",
+      "prompt": "{file:/home/kar/helmi/ecc-global/.opencode/prompts/agents/loop-operator.txt}",
+      "tools": { "read": true, "bash": true, "edit": true }
+    }
+  },
+
+  "command": {
+    "plan": {
+      "description": "Create a detailed implementation plan for complex features",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/plan.md}\n\n$ARGUMENTS",
+      "agent": "planner",
+      "subtask": true
+    },
+    "tdd": {
+      "description": "Enforce TDD workflow with 80%+ test coverage",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/tdd.md}\n\n$ARGUMENTS",
+      "agent": "tdd-guide",
+      "subtask": true
+    },
+    "code-review": {
+      "description": "Review code for quality, security, and maintainability",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/code-review.md}\n\n$ARGUMENTS",
+      "agent": "code-reviewer",
+      "subtask": true
+    },
+    "security": {
+      "description": "Run comprehensive security review",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/security.md}\n\n$ARGUMENTS",
+      "agent": "security-reviewer",
+      "subtask": true
+    },
+    "build-fix": {
+      "description": "Fix build and type errors with minimal changes",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/build-fix.md}\n\n$ARGUMENTS",
+      "agent": "build-error-resolver",
+      "subtask": true
+    },
+    "e2e": {
+      "description": "Generate and run E2E tests with Playwright",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/e2e.md}\n\n$ARGUMENTS",
+      "agent": "e2e-runner",
+      "subtask": true
+    },
+    "refactor-clean": {
+      "description": "Remove dead code and consolidate duplicates",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/refactor-clean.md}\n\n$ARGUMENTS",
+      "agent": "refactor-cleaner",
+      "subtask": true
+    },
+    "orchestrate": {
+      "description": "Orchestrate multiple agents for complex tasks",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/orchestrate.md}\n\n$ARGUMENTS",
+      "agent": "planner",
+      "subtask": true
+    },
+    "learn": {
+      "description": "Extract patterns and learnings from session",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/learn.md}\n\n$ARGUMENTS"
+    },
+    "checkpoint": {
+      "description": "Save verification state and progress",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/checkpoint.md}\n\n$ARGUMENTS"
+    },
+    "verify": {
+      "description": "Run verification loop",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/verify.md}\n\n$ARGUMENTS"
+    },
+    "eval": {
+      "description": "Run evaluation against criteria",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/eval.md}\n\n$ARGUMENTS"
+    },
+    "update-docs": {
+      "description": "Update documentation",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/update-docs.md}\n\n$ARGUMENTS",
+      "agent": "doc-updater",
+      "subtask": true
+    },
+    "test-coverage": {
+      "description": "Analyze test coverage",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/test-coverage.md}\n\n$ARGUMENTS",
+      "agent": "tdd-guide",
+      "subtask": true
+    },
+    "go-review": {
+      "description": "Go code review",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/go-review.md}\n\n$ARGUMENTS",
+      "agent": "go-reviewer",
+      "subtask": true
+    },
+    "go-test": {
+      "description": "Go TDD workflow",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/go-test.md}\n\n$ARGUMENTS",
+      "agent": "tdd-guide",
+      "subtask": true
+    },
+    "go-build": {
+      "description": "Fix Go build errors",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/go-build.md}\n\n$ARGUMENTS",
+      "agent": "go-build-resolver",
+      "subtask": true
+    },
+    "skill-create": {
+      "description": "Generate skills from git history",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/skill-create.md}\n\n$ARGUMENTS"
+    },
+    "instinct-status": {
+      "description": "View learned instincts",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/instinct-status.md}\n\n$ARGUMENTS"
+    },
+    "instinct-import": {
+      "description": "Import instincts",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/instinct-import.md}\n\n$ARGUMENTS"
+    },
+    "instinct-export": {
+      "description": "Export instincts",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/instinct-export.md}\n\n$ARGUMENTS"
+    },
+    "evolve": {
+      "description": "Cluster instincts into skills",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/evolve.md}\n\n$ARGUMENTS"
+    },
+    "promote": {
+      "description": "Promote project instincts to global scope",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/promote.md}\n\n$ARGUMENTS"
+    },
+    "projects": {
+      "description": "List known projects and instinct stats",
+      "template": "{file:/home/kar/helmi/ecc-global/.opencode/commands/projects.md}\n\n$ARGUMENTS"
+    }
+  },
+
   "permission": {
     "bash": {
       "*": "ask",
@@ -19,8 +263,10 @@
       "git status": "allow",
       "git diff *": "allow",
       "git log*": "allow"
-    }
+    },
+    "mcp_*": "ask"
   },
+
   "mcp": {
     "playwright": {
       "type": "local",
@@ -28,6 +274,7 @@
       "enabled": true
     }
   },
+
   "references": {
     "airi": {
       "repository": "moeru-ai/airi",
