@@ -6,7 +6,7 @@ import httpx
 import soundfile as sf
 
 # Kontainer sovits memuat bobot Zeta dari mount /workspace/models.
-_REF_AUDIO = "/workspace/models/sovits/zeta/Reference Audios/A1 (Neutral).wav"
+_REF_AUDIO = "/workspace/models/zeta/Reference Audios/A1 (Neutral).wav"
 _PROMPT_TEXT = (
     "I think it's a good idea to have the reload there because "
     "sometimes in movies sometimes they don't reload"

@@ -16,11 +16,16 @@ def health() -> dict[str, str]:
 @app.websocket("/ws/session")
 async def session(ws: WebSocket) -> None:
     await ws.accept()
-    pipe = Pipeline(
-        emit=lambda msg: _send_json(ws, msg),
-        emit_audio=lambda frame: _send_bytes(ws, frame),
-    )
-    await pipe.start()
+    try:
+        pipe = Pipeline(
+            emit=lambda msg: _send_json(ws, msg),
+            emit_audio=lambda frame: _send_bytes(ws, frame),
+        )
+        await pipe.start()
+    except Exception as e:
+        await _send_json(ws, {"type": "error", "message": f"init: {e}"})
+        await ws.close(code=1011)
+        return
     try:
         while True:
             raw = await ws.receive()
@@ -29,8 +34,8 @@ async def session(ws: WebSocket) -> None:
             elif raw.get("text"):
                 msg = protocol.Inbound.model_validate_json(raw["text"])
                 await pipe.handle(msg)
-    except Exception:
-        pass
+    except Exception as e:
+        await _send_json(ws, {"type": "error", "message": str(e)})
     finally:
         await pipe.stop()
 

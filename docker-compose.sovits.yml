@@ -6,7 +6,7 @@ services:
     container_name: humi-sovits
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9880:9880"
+      - "9880:9880"
     environment:
       is_half: "False"
     volumes:
