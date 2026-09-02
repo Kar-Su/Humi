@@ -37,10 +37,14 @@ export function packAudio(seq: number, payload: Uint8Array): Uint8Array {
 }
 
 export function unpackAudio(frame: Uint8Array): { seq: number; payload: Uint8Array } {
-  if (frame.length < HEADER_BYTES) throw new Error(`truncated header: got ${frame.length}, need ${HEADER_BYTES}`);
+  if (frame.length < HEADER_BYTES)
+    throw new Error(`truncated header: got ${frame.length}, need ${HEADER_BYTES}`);
   const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
   const seq = view.getUint32(0, true);
   const len = view.getUint32(4, true);
-  if (frame.length < HEADER_BYTES + len) throw new Error(`truncated payload: header claims ${len}, frame has ${frame.length - HEADER_BYTES}`);
+  if (frame.length < HEADER_BYTES + len)
+    throw new Error(
+      `truncated payload: header claims ${len}, frame has ${frame.length - HEADER_BYTES}`,
+    );
   return { seq, payload: frame.slice(HEADER_BYTES, HEADER_BYTES + len) };
 }

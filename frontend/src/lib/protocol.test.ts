@@ -1,8 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 // RED — expects functions not yet in protocol.ts, must fail before GREEN
-import { packAudio, unpackAudio, isValidEmotion, HEADER_BYTES, EMOTIONS } from "./protocol.ts";
+import { EMOTIONS, HEADER_BYTES, isValidEmotion, packAudio, unpackAudio } from "./protocol.ts";
 
 describe("protocol — audio framing", () => {
   it("roundtrip small payload", () => {
