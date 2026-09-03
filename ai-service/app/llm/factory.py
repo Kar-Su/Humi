@@ -65,14 +65,14 @@ def _ollama() -> OllamaLLM:
 def _groq() -> GroqLLM:
     return GroqLLM(
         api_key=os.environ.get("GROQ_API_KEY", ""),
-        model=os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile"),
+        model=os.environ.get("LLM_MODEL") or "openai/gpt-oss-20b",
     )
 
 
 def _openrouter() -> OpenRouterLLM:
     return OpenRouterLLM(
         api_key=os.environ.get("OPENROUTER_API_KEY", ""),
-        model=os.environ.get("LLM_MODEL", "qwen/qwen3-32b:free"),
+        model=os.environ.get("LLM_MODEL") or "qwen/qwen3-32b:free",
     )
 
 

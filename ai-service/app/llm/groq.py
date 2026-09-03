@@ -20,6 +20,7 @@ class GroqLLM:
         headers = {"Authorization": f"Bearer {self.api_key}"}
         seq = 0
         buffer = ""
+        skipping_think = False
         async with httpx.AsyncClient(timeout=300) as client:
             async with client.stream(
                 "POST",
@@ -43,6 +44,24 @@ class GroqLLM:
                     if is_interrupted():
                         break
                     delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if not delta:
+                        continue
+                    # ponytail: Groq Qwen <think> bisa bocor di streaming content
+                    if skipping_think:
+                        if "</think>" in delta:
+                            delta = delta.split("</think>", 1)[1]
+                            skipping_think = False
+                        else:
+                            continue
+                    if "<think>" in delta:
+                        before, after = delta.split("<think>", 1)
+                        if "</think>" in after:
+                            delta = before + after.split("</think>", 1)[1]
+                        else:
+                            delta = before
+                            skipping_think = True
+                            if not delta:
+                                continue
                     if not delta:
                         continue
                     buffer += delta
