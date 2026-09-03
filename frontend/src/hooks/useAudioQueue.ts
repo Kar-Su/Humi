@@ -3,13 +3,23 @@ import { HEADER_BYTES } from "../lib/protocol";
 
 export function useAudioQueue() {
   const ctxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const srcRef = useRef<AudioBufferSourceNode | null>(null);
   const queueRef = useRef<AudioBuffer[]>([]);
   const pendingRef = useRef<Map<number, { sr: number; chunks: Uint8Array[] }>>(new Map());
   const [speaking, setSpeaking] = useState(false);
 
   const ensureCtx = useCallback(() => {
-    if (!ctxRef.current) ctxRef.current = new AudioContext();
+    if (!ctxRef.current) {
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+      setAnalyser(analyser);
+      analyser.connect(ctx.destination);
+      ctxRef.current = ctx;
+    }
     if (ctxRef.current.state === "suspended") void ctxRef.current.resume();
     return ctxRef.current;
   }, []);
@@ -24,7 +34,8 @@ export function useAudioQueue() {
     const buf = queueRef.current.shift() as AudioBuffer;
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.connect(ctx.destination);
+    if (analyserRef.current) src.connect(analyserRef.current);
+    else src.connect(ctx.destination);
     srcRef.current = src;
     src.onended = () => {
       srcRef.current = null;
@@ -92,5 +103,5 @@ export function useAudioQueue() {
     setSpeaking(false);
   }, []);
 
-  return { onTtsStart, onFrame, onTtsEnd, interrupt, isSpeaking: speaking, ensureCtx };
+  return { onTtsStart, onFrame, onTtsEnd, interrupt, isSpeaking: speaking, ensureCtx, analyser };
 }

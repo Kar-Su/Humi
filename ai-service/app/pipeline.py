@@ -25,7 +25,7 @@ class Pipeline:
         self.interrupted = False
 
     async def start(self) -> None:
-        self.emit(
+        await self.emit(
             {
                 "type": "session_ready",
                 "config": {"model": self.llm.model, "voice": "sovits-zeta"},
@@ -48,7 +48,7 @@ class Pipeline:
             self.audio += payload
         elif msg.type == "audio_end":
             text = await asyncio.to_thread(self.stt.transcribe, bytes(self.audio), self.audio_rate)
-            self.emit({"type": "stt_final", "text": text})
+            await self.emit({"type": "stt_final", "text": text})
             await self.run_turn(text)
 
     async def run_turn(self, user_text: str) -> None:

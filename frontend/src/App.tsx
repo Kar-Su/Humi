@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AvatarCanvas } from "./components/AvatarCanvas";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useMicCapture } from "./hooks/useMicCapture";
-import type { Outbound } from "./lib/protocol";
+import type { Emotion, Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
 type Pesan =
@@ -23,6 +24,7 @@ export default function App() {
   const idBerikut = useRef(0);
 
   const aq = useAudioQueue();
+  const [emotion, setEmotion] = useState<Emotion>("netral");
   const sendJson = useCallback((s: string) => socketRef.current?.send(s), []);
   const sendBin = useCallback((b: ArrayBuffer) => socketRef.current?.send(b), []);
   const mic = useMicCapture(sendJson, sendBin);
@@ -51,14 +53,11 @@ export default function App() {
           return;
         }
         if (msg.type === "llm_sentence") {
+          const emo = (msg.emotion ?? "netral") as Emotion;
+          setEmotion(emo);
           setPesan((prev) => [
             ...prev,
-            {
-              id: idBerikut.current++,
-              kind: "ai",
-              teks: msg.text ?? "",
-              emotion: msg.emotion ?? "netral",
-            },
+            { id: idBerikut.current++, kind: "ai", teks: msg.text ?? "", emotion: emo },
           ]);
         } else if (msg.type === "tts_start") {
           aq.onTtsStart(msg.seq, msg.sample_rate);
@@ -100,6 +99,7 @@ export default function App() {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return;
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
     aq.interrupt();
+    setEmotion("netral");
   };
 
   const mulaiRec = async () => {
@@ -128,6 +128,8 @@ export default function App() {
         <h1 className="text-xl font-semibold">Humi {aq.isSpeaking ? "🔊" : ""}</h1>
         <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>WS: {status}</span>
       </header>
+
+      <AvatarCanvas emotion={emotion} analyser={aq.analyser} />
 
       <section className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
         {pesan.length === 0 ? (
