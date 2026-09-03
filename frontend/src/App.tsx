@@ -116,7 +116,8 @@ export default function App() {
           if ((msg as unknown as { type: string }).type === "pong") return;
           if (msg.type === "llm_sentence") {
             const emo = (msg.emotion ?? "netral") as Emotion;
-            setEmotion(emo);
+            // lerp frontend 300ms biar tidak flicker snap — ponytail: CSS transition saat VRM aktif
+            setTimeout(() => setEmotion(emo), 300);
             setPesan((prev) => [
               ...prev,
               { id: idBerikut.current++, kind: "ai", teks: msg.text ?? "", emotion: emo },

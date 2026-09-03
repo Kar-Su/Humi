@@ -5,6 +5,8 @@ import os
 
 from app import protocol
 from app.llm import get_provider
+from app.mood import MoodState
+from app.sanitize import deslop
 from app.stt import STT
 from app.tts import TTS
 
@@ -14,6 +16,7 @@ class Pipeline:
         self.emit = emit
         self.emit_audio = emit_audio
         self.llm = get_provider()
+        self.mood = MoodState()
         self.stt = STT(model=os.environ.get("WHISPER_MODEL", "small"))
         self.tts = TTS(os.environ.get("SOVITS_URL", "http://host.docker.internal:9880"))
         self.history: list[dict] = []
@@ -35,6 +38,7 @@ class Pipeline:
     async def handle(self, msg: protocol.Inbound, binary: bytes | None = None) -> None:
         if msg.type == "interrupt":
             self.interrupted = True
+            self.mood.reset()
         elif msg.type == "text" and msg.text:
             await self.run_turn(msg.text)
         elif msg.type == "audio_start":
@@ -54,6 +58,10 @@ class Pipeline:
         full: list[str] = []
 
         async def on_sentence(seq: int, text: str, emotion: str) -> None:
+            text = deslop(text)
+            if not text:
+                return
+            emotion = self.mood.update(emotion)
             full.append(text)
             await self.emit({"type": "llm_sentence", "seq": seq, "text": text, "emotion": emotion})
             if self.interrupted:
