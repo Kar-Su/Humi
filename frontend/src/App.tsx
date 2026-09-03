@@ -85,18 +85,20 @@ export default function App() {
         }, 25000);
       };
 
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         clearPing();
-        socketRef.current = null;
+        if (socketRef.current === ws) socketRef.current = null;
         if (cancelled) {
           setStatus("terputus");
           return;
         }
+        if (ev.code !== 1000)
+          toastRef.current.show(`WS terputus (code ${ev.code}) — reconnect...`, 3000);
         scheduleReconnect();
       };
 
       ws.onerror = () => {
-        // onclose akan menyusul, tidak perlu handling ganda
+        setStatus("terputus");
       };
 
       ws.onmessage = (event: MessageEvent) => {
@@ -160,12 +162,43 @@ export default function App() {
     if (!teks) return;
     const ws = socketRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      toast.show("Belum terhubung — tunggu WS: terhubung", 3000);
+      const state = ws
+        ? (["menyambung", "terhubung", "menutup", "terputus"][ws.readyState] ??
+          String(ws.readyState))
+        : "tanpa koneksi";
+      // badge desync: status masih "terhubung" tapi socket sudah menutup/tertutup
+      // sync badge segera + tutup socket biar onclose → reconnect terjadwal
+      setStatus("terputus");
+      if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      } else if (ws) {
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      }
+      toast.show(`Belum terhubung (ws: ${state}) — reconnect...`, 3000);
       return;
     }
     aqRef.current.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
-    ws.send(JSON.stringify({ type: "text", text: teks }));
+    try {
+      ws.send(JSON.stringify({ type: "text", text: teks }));
+    } catch {
+      toast.show("Gagal kirim — koneksi terputus, coba lagi", 3000);
+      setStatus("terputus");
+      try {
+        ws.close();
+      } catch {
+        // ignore
+      }
+      return;
+    }
     setDraft("");
   };
 
