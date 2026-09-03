@@ -24,72 +24,150 @@ export default function App() {
   const idBerikut = useRef(0);
 
   const aq = useAudioQueue();
+  const aqRef = useRef(aq);
+  useEffect(() => {
+    aqRef.current = aq;
+  }, [aq]);
   const [emotion, setEmotion] = useState<Emotion>("netral");
   const sendJson = useCallback((s: string) => socketRef.current?.send(s), []);
   const sendBin = useCallback((b: ArrayBuffer) => socketRef.current?.send(b), []);
   const mic = useMicCapture(sendJson, sendBin);
 
   useEffect(() => {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.binaryType = "arraybuffer";
-    socketRef.current = ws;
-    ws.onopen = () => setStatus("terhubung");
-    ws.onclose = () => setStatus("terputus");
-    ws.onmessage = (event: MessageEvent) => {
-      if (event.data instanceof ArrayBuffer) {
-        aq.onFrame(event.data as ArrayBuffer);
-        return;
-      }
-      if (typeof event.data === "string") {
-        let msg: Outbound;
-        try {
-          msg = JSON.parse(event.data) as Outbound;
-        } catch {
-          setPesan((prev) => [
-            ...prev,
-            { id: idBerikut.current++, kind: "ai", teks: event.data as string, emotion: "netral" },
-          ]);
-          return;
-        }
-        if (msg.type === "llm_sentence") {
-          const emo = (msg.emotion ?? "netral") as Emotion;
-          setEmotion(emo);
-          setPesan((prev) => [
-            ...prev,
-            { id: idBerikut.current++, kind: "ai", teks: msg.text ?? "", emotion: emo },
-          ]);
-        } else if (msg.type === "tts_start") {
-          aq.onTtsStart(msg.seq, msg.sample_rate);
-        } else if (msg.type === "tts_end") {
-          aq.onTtsEnd(msg.seq);
-        } else if (msg.type === "turn_end") {
-          // ponytail: scroll ke bawah di sini bila perlu
-        } else if (msg.type === "error") {
-          setPesan((prev) => [
-            ...prev,
-            {
-              id: idBerikut.current++,
-              kind: "ai",
-              teks: `error: ${msg.message}`,
-              emotion: "netral",
-            },
-          ]);
-        } else if (msg.type === "stt_final") {
-          setPesan((prev) => [
-            ...prev,
-            { id: idBerikut.current++, kind: "ai", teks: `stt: ${msg.text}`, emotion: "netral" },
-          ]);
-        }
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+    let pingTimer: number | null = null;
+    let reconnectTimer: number | null = null;
+    let attempt = 0;
+
+    const clearPing = () => {
+      if (pingTimer !== null) {
+        clearInterval(pingTimer);
+        pingTimer = null;
       }
     };
-    return () => ws.close();
-  }, [aq]);
+
+    const scheduleReconnect = () => {
+      if (cancelled) return;
+      setStatus("terputus");
+      attempt += 1;
+      const delay = Math.min(1000 * 1.5 ** (attempt - 1), 10000);
+      reconnectTimer = window.setTimeout(() => connect(), delay);
+    };
+
+    const connect = () => {
+      if (cancelled) return;
+      setStatus("menyambung");
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(`${proto}://${location.host}/ws`);
+      ws.binaryType = "arraybuffer";
+      socketRef.current = ws;
+
+      ws.onopen = () => {
+        attempt = 0;
+        setStatus("terhubung");
+        clearPing();
+        pingTimer = window.setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(JSON.stringify({ type: "ping" }));
+            } catch {
+              // ignore
+            }
+          }
+        }, 25000);
+      };
+
+      ws.onclose = () => {
+        clearPing();
+        socketRef.current = null;
+        if (cancelled) {
+          setStatus("terputus");
+          return;
+        }
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        // onclose akan menyusul, tidak perlu handling ganda
+      };
+
+      ws.onmessage = (event: MessageEvent) => {
+        if (event.data instanceof ArrayBuffer) {
+          aqRef.current.onFrame(event.data as ArrayBuffer);
+          return;
+        }
+        if (typeof event.data === "string") {
+          let msg: Outbound;
+          try {
+            msg = JSON.parse(event.data) as Outbound;
+          } catch {
+            setPesan((prev) => [
+              ...prev,
+              {
+                id: idBerikut.current++,
+                kind: "ai",
+                teks: event.data as string,
+                emotion: "netral",
+              },
+            ]);
+            return;
+          }
+          if ((msg as unknown as { type: string }).type === "pong") return;
+          if (msg.type === "llm_sentence") {
+            const emo = (msg.emotion ?? "netral") as Emotion;
+            setEmotion(emo);
+            setPesan((prev) => [
+              ...prev,
+              { id: idBerikut.current++, kind: "ai", teks: msg.text ?? "", emotion: emo },
+            ]);
+          } else if (msg.type === "tts_start") {
+            aqRef.current.onTtsStart(msg.seq, msg.sample_rate);
+          } else if (msg.type === "tts_end") {
+            aqRef.current.onTtsEnd(msg.seq);
+          } else if (msg.type === "turn_end") {
+            // ponytail: scroll ke bawah di sini bila perlu
+          } else if (msg.type === "error") {
+            setPesan((prev) => [
+              ...prev,
+              {
+                id: idBerikut.current++,
+                kind: "ai",
+                teks: `error: ${msg.message}`,
+                emotion: "netral",
+              },
+            ]);
+          } else if (msg.type === "stt_final") {
+            setPesan((prev) => [
+              ...prev,
+              { id: idBerikut.current++, kind: "ai", teks: `stt: ${msg.text}`, emotion: "netral" },
+            ]);
+          }
+        }
+      };
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      clearPing();
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+      if (ws) {
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      }
+      socketRef.current = null;
+    };
+  }, []);
 
   const kirim = () => {
     const teks = draft.trim();
     if (!teks || socketRef.current?.readyState !== WebSocket.OPEN) return;
-    aq.ensureCtx();
+    aqRef.current.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     socketRef.current.send(JSON.stringify({ type: "text", text: teks }));
     setDraft("");
@@ -98,14 +176,14 @@ export default function App() {
   const interupsi = () => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return;
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
-    aq.interrupt();
+    aqRef.current.interrupt();
     setEmotion("netral");
   };
 
   const mulaiRec = async () => {
     if (status !== "terhubung" || rec) return;
     try {
-      aq.interrupt();
+      aqRef.current.interrupt();
       await mic.start();
       setRec(true);
     } catch {
