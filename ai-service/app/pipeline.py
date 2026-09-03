@@ -4,7 +4,7 @@ import asyncio
 import os
 
 from app import protocol
-from app.llm import LLM
+from app.llm import get_provider
 from app.stt import STT
 from app.tts import TTS
 
@@ -13,10 +13,7 @@ class Pipeline:
     def __init__(self, emit, emit_audio) -> None:
         self.emit = emit
         self.emit_audio = emit_audio
-        self.llm = LLM(
-            os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434"),
-            os.environ.get("OLLAMA_MODEL", "qwen3:8b"),
-        )
+        self.llm = get_provider()
         self.stt = STT(model=os.environ.get("WHISPER_MODEL", "small"))
         self.tts = TTS(os.environ.get("SOVITS_URL", "http://host.docker.internal:9880"))
         self.history: list[dict] = []
