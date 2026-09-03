@@ -40,6 +40,7 @@ class LLM:
             "model": self.model,
             "messages": build_messages(history),
             "stream": True,
+            "think": False,
         }
         seq = 0
         buffer = ""

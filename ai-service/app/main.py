@@ -35,7 +35,10 @@ async def session(ws: WebSocket) -> None:
                 msg = protocol.Inbound.model_validate_json(raw["text"])
                 await pipe.handle(msg)
     except Exception as e:
-        await _send_json(ws, {"type": "error", "message": str(e)})
+        try:
+            await _send_json(ws, {"type": "error", "message": str(e)})
+        except Exception:
+            pass
     finally:
         await pipe.stop()
 
