@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AvatarCanvas } from "./components/AvatarCanvas";
+import { Toast } from "./components/Toast";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useMicCapture } from "./hooks/useMicCapture";
+import { useToast } from "./hooks/useToast";
 import type { Emotion, Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
@@ -29,6 +31,11 @@ export default function App() {
     aqRef.current = aq;
   }, [aq]);
   const [emotion, setEmotion] = useState<Emotion>("netral");
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
   const sendJson = useCallback((s: string) => socketRef.current?.send(s), []);
   const sendBin = useCallback((b: ArrayBuffer) => socketRef.current?.send(b), []);
   const mic = useMicCapture(sendJson, sendBin);
@@ -102,21 +109,12 @@ export default function App() {
           try {
             msg = JSON.parse(event.data) as Outbound;
           } catch {
-            setPesan((prev) => [
-              ...prev,
-              {
-                id: idBerikut.current++,
-                kind: "ai",
-                teks: event.data as string,
-                emotion: "netral",
-              },
-            ]);
+            toastRef.current.show(event.data as string, 3000);
             return;
           }
           if ((msg as unknown as { type: string }).type === "pong") return;
           if (msg.type === "llm_sentence") {
             const emo = (msg.emotion ?? "netral") as Emotion;
-            // lerp frontend 300ms biar tidak flicker snap — ponytail: CSS transition saat VRM aktif
             setTimeout(() => setEmotion(emo), 300);
             setPesan((prev) => [
               ...prev,
@@ -129,15 +127,7 @@ export default function App() {
           } else if (msg.type === "turn_end") {
             // ponytail: scroll ke bawah di sini bila perlu
           } else if (msg.type === "error") {
-            setPesan((prev) => [
-              ...prev,
-              {
-                id: idBerikut.current++,
-                kind: "ai",
-                teks: `error: ${msg.message}`,
-                emotion: "netral",
-              },
-            ]);
+            toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
           } else if (msg.type === "stt_final") {
             setPesan((prev) => [
               ...prev,
@@ -167,10 +157,15 @@ export default function App() {
 
   const kirim = () => {
     const teks = draft.trim();
-    if (!teks || socketRef.current?.readyState !== WebSocket.OPEN) return;
+    if (!teks) return;
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      toast.show("Belum terhubung — tunggu WS: terhubung", 3000);
+      return;
+    }
     aqRef.current.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
-    socketRef.current.send(JSON.stringify({ type: "text", text: teks }));
+    ws.send(JSON.stringify({ type: "text", text: teks }));
     setDraft("");
   };
 
@@ -188,10 +183,7 @@ export default function App() {
       await mic.start();
       setRec(true);
     } catch {
-      setPesan((prev) => [
-        ...prev,
-        { id: idBerikut.current++, kind: "ai", teks: "mic error: izin ditolak", emotion: "netral" },
-      ]);
+      toast.show("mic error: izin ditolak", 3000);
     }
   };
 
@@ -203,6 +195,7 @@ export default function App() {
 
   return (
     <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
+      <Toast items={toast.items} />
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Humi {aq.isSpeaking ? "🔊" : ""}</h1>
         <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>WS: {status}</span>
