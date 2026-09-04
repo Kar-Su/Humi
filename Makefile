@@ -1,5 +1,6 @@
 COMPOSE_FILE := docker-compose.yml
 GPU_FILE := docker-compose.gpu.yml
+SOVITS_FILE := docker-compose.sovits.yml
 MODEL ?= $(shell grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2)
 MODEL := $(if $(MODEL),$(MODEL),qwen3:8b)
 
@@ -8,6 +9,7 @@ MODEL := $(if $(MODEL),$(MODEL),qwen3:8b)
 help:
 	@echo "make up          — nyalakan stack (CPU-safe)"
 	@echo "make up-gpu      — nyalakan dengan reservasi GPU untuk Ollama"
+	@echo "make build       — build container"
 	@echo "make down        — matikan stack"
 	@echo "make logs        — ikuti log semua layanan"
 	@echo "make ps          — daftar container"
@@ -23,10 +25,13 @@ up:
 	docker compose up -d --build
 
 up-gpu:
-	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) up -d --build
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) up -d
 
 down:
-	docker compose down
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) down
+
+build:
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) build
 
 logs:
 	docker compose logs -f --tail=100
