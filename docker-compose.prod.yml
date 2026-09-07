@@ -3,7 +3,7 @@ name: ${COMPOSE_PROJECT_NAME:-humi}
 services:
   traefik:
     image: traefik:latest
-    container_name: traefik-humi
+    container_name: humi-traefik
     networks: [humi-net]
     restart: unless-stopped
     command:
@@ -11,6 +11,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entryPoints.web.address=:80"
+      - "--entryPoints.web.forwardedHeaders.insecure=true"
       - "--accessLog=true"
       - "--log.level=INFO"
     volumes:
@@ -29,7 +30,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: cloudflared-humi
+    container_name: humi-cloudflared
     networks: [humi-net]
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TOKEN} --protocol http2
