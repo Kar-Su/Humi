@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { HEADER_BYTES } from "../lib/protocol";
+import { logger } from "../lib/logger";
 
 export function useAudioQueue() {
   const ctxRef = useRef<AudioContext | null>(null);
@@ -46,6 +47,7 @@ export function useAudioQueue() {
 
   const onTtsStart = useCallback(
     (seq: number, sr: number) => {
+      logger.audio.info("tts_start", `seq=${seq} sr=${sr}`);
       pendingRef.current.set(seq, { sr, chunks: [] });
       ensureCtx();
     },
@@ -68,7 +70,11 @@ export function useAudioQueue() {
   const onTtsEnd = useCallback(
     (seq: number) => {
       const entry = pendingRef.current.get(seq);
-      if (!entry || entry.chunks.length === 0) return;
+      if (!entry || entry.chunks.length === 0) {
+        logger.audio.warn("tts_end no pending", `seq=${seq}`);
+        return;
+      }
+      logger.audio.info("tts_end", `seq=${seq} chunks=${entry.chunks.length}`);
       pendingRef.current.delete(seq);
       const total = entry.chunks.reduce((a, c) => a + c.length, 0);
       const pcm = new Uint8Array(total);
@@ -90,6 +96,7 @@ export function useAudioQueue() {
   );
 
   const interrupt = useCallback(() => {
+    logger.audio.info("interrupt audio queue");
     if (srcRef.current) {
       try {
         srcRef.current.stop();

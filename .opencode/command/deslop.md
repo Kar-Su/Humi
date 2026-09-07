@@ -8,6 +8,7 @@ Periksa diff perubahan (`git diff main` bila branch tersedia, jika tidak diff co
 - Defensive check atau blok try/except yang abnormal untuk area kode itu — terutama jika dipanggil dari jalur yang sudah tervalidasi.
 - Cast `any` di TypeScript yang dipakai untuk menutupi masalah tipe.
 - Gaya lain yang tidak konsisten dengan berkasnya.
+- Penulisan yang AI seperti penggunaan tanda '—' dan lainnya.
 
 JANGAN mengubah perilaku. Setelah selesai, jalankan linter terkait (`npm run lint`, `ruff check .`, `go vet ./...`) untuk memastikan tidak ada yang rusak.
 

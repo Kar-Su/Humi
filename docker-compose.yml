@@ -39,7 +39,7 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
-      SOVITS_URL: http://host.docker.internal:9880
+      SOVITS_URL: ${SOVITS_URL:-http://sovits:9880}
     volumes:
       - hf_cache:/home/app/.cache/huggingface
     depends_on:

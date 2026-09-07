@@ -59,21 +59,25 @@ func health(c *gin.Context) {
 
 // proxyWS me-relay dua arah antara client dan ai-service.
 func proxyWS(c *gin.Context, cfg *config.Config) {
+	log.Printf("[ws] client connect from=%s", c.Request.RemoteAddr)
 	client, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("upgrade client: %v", err)
+		log.Printf("[ws] upgrade client failed: %v", err)
 		return
 	}
 	defer client.Close()
+	log.Printf("[ws] client upgraded ok from=%s", c.Request.RemoteAddr)
 
 	upstreamURL := wsURL(cfg.AIServiceURL) + "/ws/session"
+	log.Printf("[ws] dial upstream %s", upstreamURL)
 	upstream, _, err := websocket.DefaultDialer.Dial(upstreamURL, nil)
 	if err != nil {
-		log.Printf("dial ai-service: %v", err)
+		log.Printf("[ws] dial ai-service failed: %v", err)
 		_ = client.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"ai-service tidak tersedia"}`))
 		return
 	}
 	defer upstream.Close()
+	log.Printf("[ws] upstream connected %s", upstreamURL)
 
 	const writeWait = 10 * time.Second
 	const pongWait = 60 * time.Second
@@ -126,17 +130,29 @@ func proxyWS(c *gin.Context, cfg *config.Config) {
 		for {
 			mt, msg, err := client.ReadMessage()
 			if err != nil {
+				log.Printf("[ws] client read error: %v", err)
 				_ = upstream.SetWriteDeadline(time.Now().Add(writeWait))
 				_ = upstream.WriteMessage(websocket.TextMessage, []byte(`{"type":"interrupt"}`))
 				return
 			}
 			// app-level ping/pong — jangan teruskan ke ai-service
 			if mt == websocket.TextMessage && len(msg) < 64 && isPingMessage(msg) {
+				log.Printf("[ws] ping→pong (app-level)")
 				_ = safeClientWrite(websocket.TextMessage, []byte(`{"type":"pong"}`))
 				continue
 			}
+			if mt == websocket.BinaryMessage {
+				log.Printf("[ws] relay client→upstream binary mt=%d len=%d", mt, len(msg))
+			} else {
+				preview := string(msg)
+				if len(preview) > 200 {
+					preview = preview[:200] + "…"
+				}
+				log.Printf("[ws] relay client→upstream text mt=%d len=%d msg=%s", mt, len(msg), preview)
+			}
 			_ = upstream.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := upstream.WriteMessage(mt, msg); err != nil {
+				log.Printf("[ws] write upstream failed: %v", err)
 				return
 			}
 		}
@@ -147,19 +163,32 @@ func proxyWS(c *gin.Context, cfg *config.Config) {
 		for {
 			mt, msg, err := upstream.ReadMessage()
 			if err != nil {
+				log.Printf("[ws] upstream read error: %v", err)
 				return
 			}
+			if mt == websocket.BinaryMessage {
+				log.Printf("[ws] relay upstream→client binary mt=%d len=%d", mt, len(msg))
+			} else {
+				preview := string(msg)
+				if len(preview) > 300 {
+					preview = preview[:300] + "…"
+				}
+				log.Printf("[ws] relay upstream→client text mt=%d len=%d msg=%s", mt, len(msg), preview)
+			}
 			if err := safeClientWrite(mt, msg); err != nil {
+				log.Printf("[ws] write client failed: %v", err)
 				return
 			}
 		}
 	}()
 
 	<-done
+	log.Printf("[ws] one direction closed, shutting down")
 	close(stopPing)
 	client.Close()
 	upstream.Close()
 	<-done
+	log.Printf("[ws] session fully closed from=%s", c.Request.RemoteAddr)
 }
 
 func isPingMessage(msg []byte) bool {

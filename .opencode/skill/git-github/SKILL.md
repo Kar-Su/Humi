@@ -30,6 +30,7 @@ fix/<topik>  ← idem untuk perbaikan.
 - TANYA sebelum operasi destruktif: rebase, reset --hard, branch -D.
 - Jangan commit: `.env`, berkas model (*.vrm/*.pth/*.ckpt), cache, node_modules
   (sudah dicakup .gitignore — tetap cek `git status` sebelum add).
+- Pesan Commit harus bahasa inggris
 
 ## Pola gh CLI
 

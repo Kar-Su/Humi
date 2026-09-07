@@ -11,12 +11,14 @@ Semua layanan WAJIB berjalan lewat docker compose. Larang menjalankan servis nat
 
 | Tujuan | Perintah |
 |---|---|
-| Nyalakan (CPU-safe) | `make up` |
-| Nyalakan dengan GPU | `make up-gpu` |
-| Matikan | `make down` |
+| Nyalakan Local | `make up` |
+| Nyalakan Production | `make up-prod` |
+| Matikan Local | `make down` |
+| Matikan Production | `make down-prod` |
+| Build semua service | `make build` |
 | Log semua / satu layanan | `make logs` / `docker compose logs -f gateway` |
 | Status + GPU | `make status` |
-| Rebuild satu layanan setelah ubah kode | `docker compose up -d --build <layanan>` |
+| Rebuild satu service setelah ubah kode | `docker compose up -d --build <layanan>` |
 | Eksekusi perintah dalam layanan | `docker compose exec <layanan> sh` |
 
 ## Peta Layanan & Port

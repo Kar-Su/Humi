@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { logger } from "../lib/logger";
 
 type SendJson = (s: string) => void;
 type SendBin = (b: ArrayBuffer) => void;
@@ -33,6 +34,7 @@ export function useMicCapture(sendJson: SendJson, sendBin: SendBin) {
     procRef.current = proc;
     seqRef.current = 0;
     recRef.current = true;
+    logger.audio.info("audio_start sent");
     sendJson(JSON.stringify({ type: "audio_start", format: "pcm16le", sample_rate: 16000 }));
     proc.onaudioprocess = (e) => {
       if (!recRef.current) return;
@@ -64,6 +66,7 @@ export function useMicCapture(sendJson: SendJson, sendBin: SendBin) {
       for (const t of streamRef.current.getTracks()) t.stop();
       streamRef.current = null;
     }
+    logger.audio.info("audio_end sent");
     sendJson(JSON.stringify({ type: "audio_end" }));
   }, [sendJson]);
 

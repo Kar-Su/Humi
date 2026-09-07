@@ -4,6 +4,7 @@ import { Toast } from "./components/Toast";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useMicCapture } from "./hooks/useMicCapture";
 import { useToast } from "./hooks/useToast";
+import { logger } from "./lib/logger";
 import type { Emotion, Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
@@ -66,20 +67,24 @@ export default function App() {
       if (cancelled) return;
       setStatus("menyambung");
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const url = `${proto}://${location.host}/ws`;
+      logger.ws.info("connect", url, `attempt=${attempt + 1}`);
+      ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       socketRef.current = ws;
 
       ws.onopen = () => {
         attempt = 0;
         setStatus("terhubung");
+        logger.ws.info("open", url);
         clearPing();
         pingTimer = window.setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             try {
               ws.send(JSON.stringify({ type: "ping" }));
-            } catch {
-              // ignore
+              logger.ws.debug("ping sent");
+            } catch (e) {
+              logger.ws.warn("ping send failed", e);
             }
           }
         }, 25000);
@@ -87,6 +92,7 @@ export default function App() {
 
       ws.onclose = (ev) => {
         clearPing();
+        logger.ws.warn("close", `code=${ev.code} reason=${ev.reason} clean=${ev.wasClean}`);
         if (socketRef.current === ws) socketRef.current = null;
         if (cancelled) {
           setStatus("terputus");
@@ -97,24 +103,34 @@ export default function App() {
         scheduleReconnect();
       };
 
-      ws.onerror = () => {
+      ws.onerror = (ev) => {
+        logger.ws.error("error", ev);
         setStatus("terputus");
       };
 
       ws.onmessage = (event: MessageEvent) => {
         if (event.data instanceof ArrayBuffer) {
+          const len = (event.data as ArrayBuffer).byteLength;
+          logger.ws.debug("recv binary", `len=${len}`);
           aqRef.current.onFrame(event.data as ArrayBuffer);
           return;
         }
         if (typeof event.data === "string") {
+          const raw = event.data as string;
+          logger.ws.debug("recv text", raw.slice(0, 300));
           let msg: Outbound;
           try {
-            msg = JSON.parse(event.data) as Outbound;
+            msg = JSON.parse(raw) as Outbound;
           } catch {
-            toastRef.current.show(event.data as string, 3000);
+            logger.ws.warn("recv non-JSON", raw.slice(0, 200));
+            toastRef.current.show(raw as string, 3000);
             return;
           }
-          if ((msg as unknown as { type: string }).type === "pong") return;
+          if ((msg as unknown as { type: string }).type === "pong") {
+            logger.ws.debug("pong received");
+            return;
+          }
+          logger.ws.info("recv", `type=${msg.type}`);
           if (msg.type === "llm_sentence") {
             const emo = (msg.emotion ?? "netral") as Emotion;
             setTimeout(() => setEmotion(emo), 300);
@@ -127,8 +143,11 @@ export default function App() {
           } else if (msg.type === "tts_end") {
             aqRef.current.onTtsEnd(msg.seq);
           } else if (msg.type === "turn_end") {
-            // ponytail: scroll ke bawah di sini bila perlu
+            logger.ws.info("turn_end");
+          } else if (msg.type === "session_ready") {
+            logger.ws.info("session_ready", msg.config);
           } else if (msg.type === "error") {
+            logger.ws.error("server error", msg.message);
             toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
           } else if (msg.type === "stt_final") {
             setPesan((prev) => [
@@ -161,11 +180,13 @@ export default function App() {
     const teks = draft.trim();
     if (!teks) return;
     const ws = socketRef.current;
+    logger.ws.info("kirim attempt", `text="${teks.slice(0, 80)}" wsState=${ws?.readyState}`);
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       const state = ws
         ? (["menyambung", "terhubung", "menutup", "terputus"][ws.readyState] ??
           String(ws.readyState))
         : "tanpa koneksi";
+      logger.ws.warn("kirim blocked — not open", `state=${state}`);
       // badge desync: status masih "terhubung" tapi socket sudah menutup/tertutup
       // sync badge segera + tutup socket biar onclose → reconnect terjadwal
       setStatus("terputus");
@@ -188,8 +209,11 @@ export default function App() {
     aqRef.current.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     try {
-      ws.send(JSON.stringify({ type: "text", text: teks }));
-    } catch {
+      const payload = JSON.stringify({ type: "text", text: teks });
+      ws.send(payload);
+      logger.ws.info("kirim sent", `len=${payload.length}`);
+    } catch (e) {
+      logger.ws.error("kirim failed", e);
       toast.show("Gagal kirim — koneksi terputus, coba lagi", 3000);
       setStatus("terputus");
       try {
@@ -203,7 +227,11 @@ export default function App() {
   };
 
   const interupsi = () => {
-    if (socketRef.current?.readyState !== WebSocket.OPEN) return;
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      logger.ws.warn("interupsi blocked — not open");
+      return;
+    }
+    logger.ws.info("interupsi sent");
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
     aqRef.current.interrupt();
     setEmotion("netral");
@@ -211,17 +239,21 @@ export default function App() {
 
   const mulaiRec = async () => {
     if (status !== "terhubung" || rec) return;
+    logger.audio.info("mic start");
     try {
       aqRef.current.interrupt();
       await mic.start();
       setRec(true);
-    } catch {
+      logger.audio.info("mic started");
+    } catch (e) {
+      logger.audio.error("mic error", e);
       toast.show("mic error: izin ditolak", 3000);
     }
   };
 
   const selesaiRec = () => {
     if (!rec) return;
+    logger.audio.info("mic stop");
     setRec(false);
     mic.stop();
   };
