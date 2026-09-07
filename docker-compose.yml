@@ -78,9 +78,17 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     environment:
       VITE_GATEWAY_HTTP: http://gateway:8080
+      DOMAIN: ${DOMAIN:-localhost}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     depends_on:
       gateway:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.humi-frontend.entrypoints=web"
+      - "traefik.http.routers.humi-frontend.rule=Host(`humi.${DOMAIN}`)"
+      - "traefik.http.services.humi-frontend.loadbalancer.server.port=5173"
+      # - "traefik.http.routers.humi-frontend.tls=true"
+      # - "traefik.http.routers.humi-frontend.tls.certresolver=cloudflare"
