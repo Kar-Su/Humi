@@ -32,6 +32,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      FISH_API_KEY: ${FISH_API_KEY:-}
+      FISH_API_BASE: ${FISH_API_BASE:-https://api.fish.audio}
+      FISH_REFERENCE_ID: ${FISH_REFERENCE_ID:-b8357529925148c3909f583caf29c33c}
+      FISH_MODEL: ${FISH_MODEL:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_MODEL: ${LLM_MODEL:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
