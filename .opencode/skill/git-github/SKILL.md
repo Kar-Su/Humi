@@ -22,6 +22,7 @@ fix/<topik>  ← idem untuk perbaikan.
 4. Merge dengan **squash**: `gh pr merge --squash` — 1 PR = 1 commit bersih di main.
 5. Sinkronkan kembali: `git checkout developer && git pull origin main` (atau fetch+rebase).
 6. Contoh head pesan commit: `feat(llm): Add RAG as their memory`
+7. Contoh body pesan commit (point): `- Adding RAG as their memory`
 
 ## Aturan Keras untuk Agent
 
