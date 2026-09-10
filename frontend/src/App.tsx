@@ -28,6 +28,8 @@ export default function App() {
   const [pesan, setPesan] = useState<Pesan[]>([]);
   const [draft, setDraft] = useState("");
   const [rec, setRec] = useState(false);
+  const [isHumiTyping, setIsHumiTyping] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const idBerikut = useRef(0);
   const typingControlRef = useRef<{ clearAll: () => void } | null>(null);
@@ -43,6 +45,15 @@ export default function App() {
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll trigger on pesan/isHumiTyping
+  useEffect(() => {
+    sectionRef.current?.scrollTo({ top: sectionRef.current.scrollHeight, behavior: "smooth" });
+  }, [pesan, isHumiTyping]);
+  useEffect(() => {
+    if (!isHumiTyping) return;
+    const t = window.setTimeout(() => setIsHumiTyping(false), 15000);
+    return () => clearTimeout(t);
+  }, [isHumiTyping]);
   const sendJson = useCallback((s: string) => socketRef.current?.send(s), []);
   const sendBin = useCallback((b: ArrayBuffer) => socketRef.current?.send(b), []);
   const mic = useMicCapture(sendJson, sendBin);
@@ -130,12 +141,15 @@ export default function App() {
           clearPendingDelays();
           typingQueue.length = 0;
           pendingText.clear();
+          setIsHumiTyping(false);
         },
       };
       const drainQueue = () => {
         if (isTyping || typingQueue.length === 0) return;
+        // biome-ignore lint/style/noNonNullAssertion: guarded by length check above
         const next = typingQueue.shift()!;
         isTyping = true;
+        setIsHumiTyping(false);
         setEmotion(next.emotion);
         const bubbleId = idBerikut.current++;
         setPesan((prev) => [
@@ -205,10 +219,10 @@ export default function App() {
             }
             const chunkText = parts.join(" ");
             if (chunkText) {
-              const tid = window.setTimeout(
-                () => startTyping(chunkText, (chunkEmo ?? "netral") as Emotion, dur),
-                TTS_LEAD_MS,
-              );
+              const tid = window.setTimeout(() => {
+                setIsHumiTyping(false);
+                startTyping(chunkText, (chunkEmo ?? "netral") as Emotion, dur);
+              }, TTS_LEAD_MS);
               typingDelayTimers.push(tid);
             }
             return;
@@ -224,6 +238,8 @@ export default function App() {
               }
               pendingText.clear();
               drainQueue();
+            } else if (typingQueue.length === 0 && typingDelayTimers.length === 0) {
+              setIsHumiTyping(false);
             }
             return;
           }
@@ -233,6 +249,7 @@ export default function App() {
             clearPendingDelays();
             typingQueue.length = 0;
             pendingText.clear();
+            setIsHumiTyping(false);
             toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
             return;
           }
@@ -284,6 +301,7 @@ export default function App() {
     }
     aqRef.current.ensureCtx();
     typingControlRef.current?.clearAll();
+    setIsHumiTyping(true);
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     try {
       ws.send(JSON.stringify({ type: "text", text: teks, lang }));
@@ -312,7 +330,7 @@ export default function App() {
       aqRef.current.interrupt();
       await mic.start();
       setRec(true);
-    } catch (e) {
+    } catch {
       toast.show("mic error: izin ditolak", 3000);
     }
   };
@@ -353,7 +371,10 @@ export default function App() {
 
       <AvatarCanvas emotion={emotion} analyser={aq.analyser} />
 
-      <section className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+      <section
+        ref={sectionRef as unknown as React.RefObject<HTMLDivElement>}
+        className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4"
+      >
         {pesan.length === 0 ? (
           <p className="text-sm text-neutral-500">
             Fase C - ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
@@ -374,7 +395,27 @@ export default function App() {
                 </li>
               ),
             )}
+            {isHumiTyping && (
+              <li className="mr-10 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
+                <span className="inline-flex gap-0.5">
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce [animation-delay:120ms]">.</span>
+                  <span className="animate-bounce [animation-delay:240ms]">.</span>
+                </span>
+                Humi is typing...
+              </li>
+            )}
           </ul>
+        )}
+        {pesan.length === 0 && isHumiTyping && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
+            <span className="inline-flex gap-0.5">
+              <span className="animate-bounce">.</span>
+              <span className="animate-bounce [animation-delay:120ms]">.</span>
+              <span className="animate-bounce [animation-delay:240ms]">.</span>
+            </span>
+            Humi is typing...
+          </div>
         )}
       </section>
 
