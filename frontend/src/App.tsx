@@ -106,6 +106,51 @@ export default function App() {
         setStatus("terputus");
       };
 
+      const pendingText = new Map<number, { text: string; emotion: Emotion }>();
+      let typingTimer: number | null = null;
+      const typingQueue: Array<{ text: string; emotion: Emotion; duration: number }> = [];
+      let isTyping = false;
+      const clearTyping = () => {
+        if (typingTimer !== null) {
+          clearInterval(typingTimer);
+          typingTimer = null;
+        }
+        isTyping = false;
+      };
+      const drainQueue = () => {
+        if (isTyping || typingQueue.length === 0) return;
+        const next = typingQueue.shift()!;
+        isTyping = true;
+        setEmotion(next.emotion);
+        const bubbleId = idBerikut.current++;
+        setPesan((prev) => [
+          ...prev,
+          { id: bubbleId, kind: "ai", teks: "", emotion: next.emotion },
+        ]);
+        const totalMs = Math.max(
+          400,
+          Math.min(4000, next.duration > 0 ? next.duration * 1000 : next.text.length * 40),
+        );
+        const perChar = Math.max(16, Math.min(60, totalMs / Math.max(1, next.text.length)));
+        let idx = 0;
+        typingTimer = window.setInterval(() => {
+          idx += 1;
+          const slice = next.text.slice(0, idx);
+          setPesan((prev) => prev.map((p) => (p.id === bubbleId ? { ...p, teks: slice } : p)));
+          if (idx >= next.text.length) {
+            clearInterval(typingTimer as unknown as number);
+            typingTimer = null;
+            isTyping = false;
+            drainQueue();
+          }
+        }, perChar) as unknown as number;
+      };
+      const startTyping = (chunkText: string, chunkEmotion: Emotion, duration: number) => {
+        if (!chunkText) return;
+        typingQueue.push({ text: chunkText, emotion: chunkEmotion, duration });
+        drainQueue();
+      };
+
       ws.onmessage = (event: MessageEvent) => {
         if (event.data instanceof ArrayBuffer) {
           aqRef.current.onFrame(event.data as ArrayBuffer);
@@ -122,21 +167,56 @@ export default function App() {
           }
           if (msg.type === "pong") return;
           if (msg.type === "llm_sentence") {
-            const emo = (msg.emotion ?? "netral") as Emotion;
-            setTimeout(() => setEmotion(emo), 300);
-            setPesan((prev) => [
-              ...prev,
-              { id: idBerikut.current++, kind: "ai", teks: msg.text ?? "", emotion: emo },
-            ]);
-          } else if (msg.type === "tts_start") {
+            pendingText.set(msg.seq, {
+              text: msg.text ?? "",
+              emotion: (msg.emotion ?? "netral") as Emotion,
+            });
+            return;
+          }
+          if (msg.type === "tts_start") {
             aqRef.current.onTtsStart(msg.seq, msg.sample_rate);
-          } else if (msg.type === "tts_end") {
+            const seqs = (msg as unknown as { seqs?: number[] }).seqs ?? [msg.seq];
+            const dur = (msg as unknown as { duration?: number }).duration ?? 0;
+            const emo = (msg as unknown as { emotion?: string }).emotion as Emotion | undefined;
+            const parts: string[] = [];
+            let chunkEmo: Emotion | undefined = emo as Emotion | undefined;
+            for (const s of seqs) {
+              const p = pendingText.get(s);
+              if (p) {
+                parts.push(p.text);
+                if (!chunkEmo) chunkEmo = p.emotion;
+                pendingText.delete(s);
+              }
+            }
+            const chunkText = parts.join(" ");
+            if (chunkText) startTyping(chunkText, (chunkEmo ?? "netral") as Emotion, dur);
+            return;
+          }
+          if (msg.type === "tts_end") {
             aqRef.current.onTtsEnd(msg.seq);
-          } else if (msg.type === "turn_end") {
-          } else if (msg.type === "session_ready") {
-          } else if (msg.type === "error") {
+            return;
+          }
+          if (msg.type === "turn_end") {
+            if (pendingText.size > 0) {
+              for (const [, v] of Array.from(pendingText.entries())) {
+                const emo = v.emotion as Emotion;
+                setEmotion(emo);
+                setPesan((prev) => [
+                  ...prev,
+                  { id: idBerikut.current++, kind: "ai", teks: v.text, emotion: emo },
+                ]);
+              }
+              pendingText.clear();
+            }
+            clearTyping();
+            return;
+          }
+          if (msg.type === "session_ready") return;
+          if (msg.type === "error") {
             toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
-          } else if (msg.type === "stt_final") {
+            return;
+          }
+          if (msg.type === "stt_final") {
             setPesan((prev) => [
               ...prev,
               { id: idBerikut.current++, kind: "ai", teks: `stt: ${msg.text}`, emotion: "netral" },

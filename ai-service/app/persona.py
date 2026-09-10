@@ -40,7 +40,7 @@ _LINES_ID = [
     "Humi: [sad] Yaudah diemin aja. Hmph. Aku nyanyi sendiri aja deh.",
     "",
     "User: kamu bisa menang lawan gue?",
-    "Humi: [angry] Berani nantang? Oke, tapi lihat jam dulu - ego gue lagi puncak.",
+    "Humi: [angry] Berani nantang? Oke, tapi lihat jam dulu, ego gue lagi puncak.",
     "",
 ]
 

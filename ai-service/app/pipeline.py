@@ -108,8 +108,47 @@ class Pipeline:
         self.history.append({"role": "user", "content": user_text})
         full: list[str] = []
         emotions: list[str] = []
+        tts_buffer: list[tuple[int, str, str]] = []
+        tts_char = 0
+        next_tts_seq = 1
+        pending_tasks: list[asyncio.Task[None]] = []
+
+        async def synthesize_and_emit(
+            chunk_text: str, chunk_emotion: str, seq_chunk: int, seqs: list[int]
+        ) -> None:
+            try:
+                pcm, rate = await asyncio.to_thread(
+                    self.tts.synthesize, chunk_text, chunk_emotion, self.lang
+                )
+                if self.interrupted:
+                    return
+                duration = len(pcm) / 2 / rate if rate else 0
+                await self.emit(
+                    {
+                        "type": "tts_start",
+                        "seq": seq_chunk,
+                        "seqs": seqs,
+                        "emotion": chunk_emotion,
+                        "format": "pcm16le",
+                        "sample_rate": rate,
+                        "duration": round(duration, 3),
+                    }
+                )
+                await self.emit_audio(protocol.pack_audio(seq_chunk, pcm))
+                await self.emit({"type": "tts_end", "seq": seq_chunk})
+                logger.info(
+                    "[pipeline] tts chunk seq=%d pcm=%d emotion=%s",
+                    seq_chunk,
+                    len(pcm),
+                    chunk_emotion,
+                )
+            except Exception as e:
+                logger.error("[pipeline] tts chunk failed seq=%d: %s", seq_chunk, e, exc_info=True)
+                if not self.interrupted:
+                    await self.emit({"type": "error", "message": f"tts error: {e}"})
 
         async def on_sentence(seq: int, text: str, emotion: str) -> None:
+            nonlocal tts_char, next_tts_seq
             logger.info("[pipeline] on_sentence seq=%d emotion=%s text=%r", seq, emotion, text[:80])
             text = deslop(text)
             if not text:
@@ -120,6 +159,26 @@ class Pipeline:
             emotions.append(emotion)
             await self.emit({"type": "llm_sentence", "seq": seq, "text": text, "emotion": emotion})
             logger.info("[pipeline] llm_sentence emitted seq=%d", seq)
+            tts_buffer.append((seq, text, emotion))
+            tts_char += len(text)
+            if len(tts_buffer) >= 2 or tts_char >= 120:
+                chunk_text = " ".join(t for _, t, _ in tts_buffer)
+                chunk_emotions = [e for _, _, e in tts_buffer]
+                chunk_dominant = (
+                    max(set(chunk_emotions), key=chunk_emotions.count)
+                    if chunk_emotions
+                    else "netral"
+                )
+                seqs = [s for s, _, _ in tts_buffer]
+                seq_chunk = next_tts_seq
+                next_tts_seq += 1
+                pending_tasks.append(
+                    asyncio.create_task(
+                        synthesize_and_emit(chunk_text, chunk_dominant, seq_chunk, seqs)
+                    )
+                )
+                tts_buffer.clear()
+                tts_char = 0
 
         try:
             await self.llm.stream(
@@ -139,6 +198,30 @@ class Pipeline:
             )
             await self.emit({"type": "error", "message": f"llm error: {e}"})
             raise
+        if tts_buffer:
+            chunk_text = " ".join(t for _, t, _ in tts_buffer)
+            chunk_emotions = [e for _, _, e in tts_buffer]
+            chunk_dominant = (
+                max(set(chunk_emotions), key=chunk_emotions.count) if chunk_emotions else "netral"
+            )
+            seqs = [s for s, _, _ in tts_buffer]
+            seq_chunk = next_tts_seq
+            next_tts_seq += 1
+            pending_tasks.append(
+                asyncio.create_task(
+                    synthesize_and_emit(chunk_text, chunk_dominant, seq_chunk, seqs)
+                )
+            )
+            tts_buffer.clear()
+        if pending_tasks:
+            try:
+                await asyncio.gather(*pending_tasks)
+            except Exception as e:
+                logger.error("[pipeline] gather tts failed: %s", e, exc_info=True)
+            if self.interrupted:
+                for task in pending_tasks:
+                    if not task.done():
+                        task.cancel()
         if self.interrupted or not full:
             if full:
                 self.history.append({"role": "assistant", "content": " ".join(full)})
@@ -150,20 +233,6 @@ class Pipeline:
             )
             return
         assistant_text = " ".join(full)
-        dominant = max(set(emotions), key=emotions.count) if emotions else "netral"
-        t_tts = time.monotonic()
-        pcm, rate = await asyncio.to_thread(self.tts.synthesize, assistant_text, dominant)
-        logger.info(
-            "[pipeline] tts done pcm=%d rate=%d emotion=%s elapsed=%.2fs",
-            len(pcm),
-            rate,
-            dominant,
-            time.monotonic() - t_tts,
-        )
-        await self.emit({"type": "tts_start", "seq": 1, "format": "pcm16le", "sample_rate": rate})
-        await self.emit_audio(protocol.pack_audio(1, pcm))
-        await self.emit({"type": "tts_end", "seq": 1})
-        logger.info("[pipeline] tts audio sent seq=1")
         self.history.append({"role": "assistant", "content": assistant_text})
         await self.emit({"type": "turn_end"})
         logger.info(

@@ -108,12 +108,14 @@ mensinkronkan keempatnya dalam satu commit: SKILL.md itu, tipe TS, struct Go, mo
 ```bash
 cp .env.example .env   # sekali di awal
 make doctor            # cek prasyarat (docker, GPU toolkit)
-make up                # nyalakan stack (CPU-safe)
-make up-gpu            # nyalakan dengan reservasi GPU untuk Ollama
+make up                # nyalakan stack
+make up-prod           # nyalakan stack dan production
+make build             # build stack
 make pull-models       # unduh LLM default ke volume Ollama
 make logs              # ikuti log semua layanan
 make status            # kesehatan layanan + GPU
 make down              # matikan stack
+make down-prod        # matikan stack dan production
 # --- benchmark TTS ---
 make audisi [ARGS="gadis ardi"]   # dengarkan suara Wikidepia (pilih speaker)
 make piper             # re-test Piper + skor otomatis -> out/piper_skor.csv

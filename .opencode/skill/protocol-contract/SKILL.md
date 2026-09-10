@@ -38,9 +38,10 @@ Satu koneksi WebSocket client↔gateway: `/ws`. Gateway me-relay ke ai-service
 ```json
 {"type": "session_ready", "config": {"model": "qwen3:8b", "voice": "default"}}
 {"type": "stt_final", "text": "halo, apa kabar?"}
-{"type": "llm_sentence", "seq": 1, "text": "Kabar baik!", "emotion": "senang"}
-{"type": "tts_start", "seq": 1, "format": "pcm16le", "sample_rate": 24000}
+{"type": "llm_sentence", "seq": 1, "text": "Kabar baik!", "emotion": "happy"}
+{"type": "tts_start", "seq": 1, "seqs": [1, 2], "format": "pcm16le", "sample_rate": 24000}
 {"type": "tts_end", "seq": 1}
+{"type": "pong"}
 {"type": "turn_end"}
 ```
 

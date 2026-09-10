@@ -41,7 +41,15 @@ export type Outbound =
   | { type: "session_ready"; config: { model: string; voice: string } }
   | { type: "stt_final"; text: string }
   | { type: "llm_sentence"; seq: number; text: string; emotion: Emotion }
-  | { type: "tts_start"; seq: number; format: string; sample_rate: number }
+  | {
+      type: "tts_start";
+      seq: number;
+      seqs?: number[];
+      emotion?: Emotion;
+      format: string;
+      sample_rate: number;
+      duration?: number;
+    }
   | { type: "tts_end"; seq: number }
   | { type: "turn_end" }
   | { type: "error"; message: string }

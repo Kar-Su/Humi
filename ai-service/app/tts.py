@@ -55,14 +55,20 @@ class TTS:
             self.model or "(default)",
         )
 
-    def synthesize(self, text: str, emotion: str | None = None) -> tuple[bytes, int]:
+    def synthesize(
+        self, text: str, emotion: str | None = None, lang: str = "id"
+    ) -> tuple[bytes, int]:
+        if lang == "id":
+            from app.g2p import to_ipa_id
+
+            text = to_ipa_id(text)
         tag = emotion if emotion in _FISH_ALLOWED else None
         tagged = f"[{tag}] {text}" if tag else text
         payload: dict[str, str] = {"text": tagged, "reference_id": self.ref_id, "format": "wav"}
         if self.model:
             payload["model"] = self.model
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        logger.info("[tts] fish text=%r emotion=%s tag=%s", text[:60], emotion, tag)
+        logger.info("[tts] fish text=%r emotion=%s tag=%s lang=%s", text[:60], emotion, tag, lang)
         resp = httpx.post(f"{self.base}/v1/tts", json=payload, headers=headers, timeout=60)
         resp.raise_for_status()
         data, rate = sf.read(io.BytesIO(resp.content), dtype="int16")

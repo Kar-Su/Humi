@@ -61,11 +61,13 @@ class Outbound(BaseModel):
         "tts_end",
         "turn_end",
         "error",
+        "pong",
     ]
     config: Config | None = None
     text: str | None = None
     emotion: str | None = None
     seq: int | None = None
+    seqs: list[int] | None = None
     format: str | None = None
     sample_rate: int | None = None
     message: str | None = None
