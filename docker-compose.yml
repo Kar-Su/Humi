@@ -50,7 +50,11 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      test: >
+              sh -c "
+              python -c \"import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)\" > /dev/null 2>&1 ||
+              (echo '[WARNING/FAILED] Healthcheck error: endpoint /health tidak merespon!' && exit 1)
+              "
       interval: 15s
       timeout: 5s
       retries: 5

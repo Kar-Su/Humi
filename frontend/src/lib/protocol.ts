@@ -1,7 +1,33 @@
 // Kontrak pesan WebSocket Humi. Sinkron dengan skill protocol-contract,
 // gateway/internal/protocol/protocol.go, dan ai-service/app/protocol.py.
 
-export const EMOTIONS = ["netral", "senang", "sedih", "kaget", "penasaran"] as const;
+export const EMOTIONS = [
+  "netral",
+  "happy",
+  "sad",
+  "angry",
+  "excited",
+  "calm",
+  "nervous",
+  "confident",
+  "surprised",
+  "satisfied",
+  "delighted",
+  "scared",
+  "worried",
+  "upset",
+  "frustrated",
+  "depressed",
+  "empathetic",
+  "embarrassed",
+  "disgusted",
+  "moved",
+  "proud",
+  "relaxed",
+  "grateful",
+  "curious",
+  "sarcastic",
+] as const;
 export type Emotion = (typeof EMOTIONS)[number];
 
 export type Inbound =

@@ -69,6 +69,7 @@ sekaligus media latihan komunikasi secara natural.
 - Semua layanan WAJIB jalan lewat docker compose — larang menjalankan servis native di host.
 
 ## Pengujian & Lint
+Harus berada di area folder masing-masing.
 
 | Area | Perintah |
 |---|---|
@@ -99,6 +100,8 @@ mensinkronkan keempatnya dalam satu commit: SKILL.md itu, tipe TS, struct Go, mo
 - Conventional Commits: `feat(gateway): ...`, `fix(ai-service): ...`, `docs: ...`.
 - Jangan pernah commit: `.env`, berkas model (*.vrm, checkpoint), cache, `node_modules`.
 - Commit kecil dan fokus; jangan pernah push/merge langsung ke `main`.
+- Pesan Commit harus bahasa inggris
+- Jangan menggunakan emoji, em dash, dan AI slop lainnya.
 
 ## Cheat-sheet
 

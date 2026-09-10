@@ -5,7 +5,33 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-EMOTIONS = ("netral", "senang", "sedih", "kaget", "penasaran")
+EMOTIONS = (
+    "netral",
+    "happy",
+    "sad",
+    "angry",
+    "excited",
+    "calm",
+    "nervous",
+    "confident",
+    "surprised",
+    "satisfied",
+    "delighted",
+    "scared",
+    "worried",
+    "upset",
+    "frustrated",
+    "depressed",
+    "empathetic",
+    "embarrassed",
+    "disgusted",
+    "moved",
+    "proud",
+    "relaxed",
+    "grateful",
+    "curious",
+    "sarcastic",
+)
 
 # Framing audio biner: [seq u32 LE][len u32 LE][payload]
 _HEADER = struct.Struct("<II")

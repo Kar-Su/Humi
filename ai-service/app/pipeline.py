@@ -107,6 +107,7 @@ class Pipeline:
         self.interrupted = False
         self.history.append({"role": "user", "content": user_text})
         full: list[str] = []
+        emotions: list[str] = []
 
         async def on_sentence(seq: int, text: str, emotion: str) -> None:
             logger.info("[pipeline] on_sentence seq=%d emotion=%s text=%r", seq, emotion, text[:80])
@@ -116,26 +117,9 @@ class Pipeline:
                 return
             emotion = self.mood.update(emotion)
             full.append(text)
+            emotions.append(emotion)
             await self.emit({"type": "llm_sentence", "seq": seq, "text": text, "emotion": emotion})
             logger.info("[pipeline] llm_sentence emitted seq=%d", seq)
-            if self.interrupted:
-                logger.info("[pipeline] interrupted after llm_sentence seq=%d", seq)
-                return
-            t_tts = time.monotonic()
-            pcm, rate = await asyncio.to_thread(self.tts.synthesize, text, emotion)
-            logger.info(
-                "[pipeline] tts done seq=%d pcm=%d rate=%d elapsed=%.2fs",
-                seq,
-                len(pcm),
-                rate,
-                time.monotonic() - t_tts,
-            )
-            await self.emit(
-                {"type": "tts_start", "seq": seq, "format": "pcm16le", "sample_rate": rate}
-            )
-            await self.emit_audio(protocol.pack_audio(seq, pcm))
-            await self.emit({"type": "tts_end", "seq": seq})
-            logger.info("[pipeline] tts audio sent seq=%d", seq)
 
         try:
             await self.llm.stream(
@@ -155,8 +139,33 @@ class Pipeline:
             )
             await self.emit({"type": "error", "message": f"llm error: {e}"})
             raise
-        self.history.append({"role": "assistant", "content": " ".join(full)})
+        if self.interrupted or not full:
+            if full:
+                self.history.append({"role": "assistant", "content": " ".join(full)})
+            await self.emit({"type": "turn_end"})
+            logger.info(
+                "[pipeline] turn_end interrupted full=%r elapsed=%.2fs",
+                " ".join(full)[:120],
+                time.monotonic() - t0,
+            )
+            return
+        assistant_text = " ".join(full)
+        dominant = max(set(emotions), key=emotions.count) if emotions else "netral"
+        t_tts = time.monotonic()
+        pcm, rate = await asyncio.to_thread(self.tts.synthesize, assistant_text, dominant)
+        logger.info(
+            "[pipeline] tts done pcm=%d rate=%d emotion=%s elapsed=%.2fs",
+            len(pcm),
+            rate,
+            dominant,
+            time.monotonic() - t_tts,
+        )
+        await self.emit({"type": "tts_start", "seq": 1, "format": "pcm16le", "sample_rate": rate})
+        await self.emit_audio(protocol.pack_audio(1, pcm))
+        await self.emit({"type": "tts_end", "seq": 1})
+        logger.info("[pipeline] tts audio sent seq=1")
+        self.history.append({"role": "assistant", "content": assistant_text})
         await self.emit({"type": "turn_end"})
         logger.info(
-            "[pipeline] turn_end full=%r elapsed=%.2fs", " ".join(full)[:120], time.monotonic() - t0
+            "[pipeline] turn_end full=%r elapsed=%.2fs", assistant_text[:120], time.monotonic() - t0
         )

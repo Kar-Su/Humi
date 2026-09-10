@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
-EMOTION_TAG = re.compile(r"^\s*\[(senang|sedih|kaget|penasaran)\]\s*")
+EMOTION_TAG = re.compile(
+    r"^\s*\[(happy|sad|angry|excited|calm|nervous|confident|surprised|satisfied|delighted|scared|worried|upset|frustrated|depressed|empathetic|embarrassed|disgusted|moved|proud|relaxed|grateful|curious|sarcastic)\]\s*"
+)
 
 
 def parse_emotion(text: str) -> tuple[str, str]:

@@ -48,7 +48,8 @@ describe("protocol — emotions", () => {
   });
   it("invalid emotions", () => {
     assert.equal(isValidEmotion("marah"), false);
+    assert.equal(isValidEmotion("senang"), false);
     assert.equal(isValidEmotion(""), false);
-    assert.equal(isValidEmotion("SENANG"), false);
+    assert.equal(isValidEmotion("HAPPY"), false);
   });
 });

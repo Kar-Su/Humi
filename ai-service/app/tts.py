@@ -9,18 +9,39 @@ import soundfile as sf
 
 logger = logging.getLogger("ai-service.tts")
 
-_EMOTION_TAG = {
-    "senang": "happy",
-    "sedih": "sad",
-    "kaget": "surprised",
-    "penasaran": "curious",
-    "netral": None,
-}
+_FISH_ALLOWED = frozenset(
+    {
+        "happy",
+        "sad",
+        "angry",
+        "excited",
+        "calm",
+        "nervous",
+        "confident",
+        "surprised",
+        "satisfied",
+        "delighted",
+        "scared",
+        "worried",
+        "upset",
+        "frustrated",
+        "depressed",
+        "empathetic",
+        "embarrassed",
+        "disgusted",
+        "moved",
+        "proud",
+        "relaxed",
+        "grateful",
+        "curious",
+        "sarcastic",
+    }
+)
 
 
 class TTS:
     def __init__(self, url: str | None = None, profile: str = "zeta") -> None:
-        del url, profile  # sovits legacy, keep compat
+        del url, profile
         self.api_key = os.environ.get("FISH_API_KEY", "")
         self.ref_id = os.environ.get("FISH_REFERENCE_ID", "b8357529925148c3909f583caf29c33c")
         self.model = os.environ.get("FISH_MODEL", "").strip()
@@ -35,7 +56,7 @@ class TTS:
         )
 
     def synthesize(self, text: str, emotion: str | None = None) -> tuple[bytes, int]:
-        tag = _EMOTION_TAG.get(emotion or "netral")
+        tag = emotion if emotion in _FISH_ALLOWED else None
         tagged = f"[{tag}] {text}" if tag else text
         payload: dict[str, str] = {"text": tagged, "reference_id": self.ref_id, "format": "wav"}
         if self.model:

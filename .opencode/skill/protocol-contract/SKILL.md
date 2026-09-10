@@ -45,7 +45,8 @@ Satu koneksi WebSocket client↔gateway: `/ws`. Gateway me-relay ke ai-service
 ```
 
 - Frame biner audio keluaran memakai framing sama seperti masukan (`[seq][len][payload]`).
-- `emotion` ∈ {netral, senang, sedih, kaget, penasaran} — kamus lengkap di skill `persona-prompting`; mapping ke blendshape di skill `avatar-frontend`.
+- `emotion` ∈ Fish S2 Basic 24 + `netral` (tanpa tag): `happy, sad, angry, excited, calm, nervous, confident, surprised, satisfied, delighted, scared, worried, upset, frustrated, depressed, empathetic, embarrassed, disgusted, moved, proud, relaxed, grateful, curious, sarcastic` + `netral`. LLM generate tag Fish langsung, tanpa convert.
+- `Inbound.text` opsional `lang: "id"|"en"` untuk toggle bahasa AI.
 - Satu giliran jawaban = N × (`llm_sentence` → `tts_start` → audio biner → `tts_end`) → ditutup `turn_end`.
 
 ## Endpoint REST Internal (gateway ↔ ai-service)
