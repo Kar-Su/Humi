@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +29,7 @@ func New(cfg *config.Config) *Server {
 	r := gin.New()
 	r.Use(gin.Recovery(), cors())
 	r.GET("/health", health)
-	r.GET("/ws", echo)
+	r.GET("/ws", func(c *gin.Context) { proxyWS(c, cfg) })
 
 	return &Server{
 		cfg: cfg,
@@ -55,23 +57,174 @@ func health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "gateway"})
 }
 
-func echo(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+// proxyWS me-relay dua arah antara client dan ai-service.
+func proxyWS(c *gin.Context, cfg *config.Config) {
+	log.Printf("[ws] client connect from=%s", c.Request.RemoteAddr)
+	client, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("upgrade: %v", err)
+		log.Printf("[ws] upgrade client failed: %v", err)
 		return
 	}
-	defer conn.Close()
-	for {
-		mt, msg, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("read: %v", err)
-			return
+	defer client.Close()
+	log.Printf("[ws] client upgraded ok from=%s", c.Request.RemoteAddr)
+
+	upstreamURL := wsURL(cfg.AIServiceURL) + "/ws/session"
+	log.Printf("[ws] dial upstream %s", upstreamURL)
+	upstream, _, err := websocket.DefaultDialer.Dial(upstreamURL, nil)
+	if err != nil {
+		log.Printf("[ws] dial ai-service failed: %v", err)
+		_ = client.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"ai-service tidak tersedia"}`))
+		return
+	}
+	defer upstream.Close()
+	log.Printf("[ws] upstream connected %s", upstreamURL)
+
+	const writeWait = 10 * time.Second
+	const pongWait = 60 * time.Second
+	const pingPeriod = 30 * time.Second
+
+	client.SetReadLimit(1 << 20)
+	_ = client.SetReadDeadline(time.Now().Add(pongWait))
+	client.SetPongHandler(func(string) error {
+		_ = client.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+	upstream.SetReadLimit(1 << 20)
+	_ = upstream.SetReadDeadline(time.Now().Add(pongWait))
+	upstream.SetPongHandler(func(string) error {
+		_ = upstream.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	var writeMu sync.Mutex
+	safeClientWrite := func(mt int, msg []byte) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		_ = client.SetWriteDeadline(time.Now().Add(writeWait))
+		return client.WriteMessage(mt, msg)
+	}
+
+	done := make(chan struct{}, 2)
+	stopPing := make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				writeMu.Lock()
+				_ = client.SetWriteDeadline(time.Now().Add(writeWait))
+				_ = client.WriteMessage(websocket.PingMessage, nil)
+				writeMu.Unlock()
+				_ = upstream.SetWriteDeadline(time.Now().Add(writeWait))
+				_ = upstream.WriteMessage(websocket.PingMessage, nil)
+			case <-stopPing:
+				return
+			}
 		}
-		if err := conn.WriteMessage(mt, msg); err != nil {
-			log.Printf("write: %v", err)
-			return
+	}()
+
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			mt, msg, err := client.ReadMessage()
+			if err != nil {
+				log.Printf("[ws] client read error: %v", err)
+				_ = upstream.SetWriteDeadline(time.Now().Add(writeWait))
+				_ = upstream.WriteMessage(websocket.TextMessage, []byte(`{"type":"interrupt"}`))
+				return
+			}
+			// app-level ping/pong — jangan teruskan ke ai-service
+			if mt == websocket.TextMessage && len(msg) < 64 && isPingMessage(msg) {
+				log.Printf("[ws] ping→pong (app-level)")
+				_ = safeClientWrite(websocket.TextMessage, []byte(`{"type":"pong"}`))
+				continue
+			}
+			if mt == websocket.BinaryMessage {
+				log.Printf("[ws] relay client→upstream binary mt=%d len=%d", mt, len(msg))
+			} else {
+				preview := string(msg)
+				if len(preview) > 200 {
+					preview = preview[:200] + "…"
+				}
+				log.Printf("[ws] relay client→upstream text mt=%d len=%d msg=%s", mt, len(msg), preview)
+			}
+			_ = upstream.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := upstream.WriteMessage(mt, msg); err != nil {
+				log.Printf("[ws] write upstream failed: %v", err)
+				return
+			}
 		}
+	}()
+
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			mt, msg, err := upstream.ReadMessage()
+			if err != nil {
+				log.Printf("[ws] upstream read error: %v", err)
+				return
+			}
+			if mt == websocket.BinaryMessage {
+				log.Printf("[ws] relay upstream→client binary mt=%d len=%d", mt, len(msg))
+			} else {
+				preview := string(msg)
+				if len(preview) > 300 {
+					preview = preview[:300] + "…"
+				}
+				log.Printf("[ws] relay upstream→client text mt=%d len=%d msg=%s", mt, len(msg), preview)
+			}
+			if err := safeClientWrite(mt, msg); err != nil {
+				log.Printf("[ws] write client failed: %v", err)
+				return
+			}
+		}
+	}()
+
+	<-done
+	log.Printf("[ws] one direction closed, shutting down")
+	close(stopPing)
+	client.Close()
+	upstream.Close()
+	<-done
+	log.Printf("[ws] session fully closed from=%s", c.Request.RemoteAddr)
+}
+
+func isPingMessage(msg []byte) bool {
+	if len(msg) < 10 {
+		return false
+	}
+	s := string(msg)
+	return len(s) < 64 && (s == `{"type":"ping"}` || containsPing(s))
+}
+
+func containsPing(s string) bool {
+	// tolerate {"type": "ping"} dengan spasi
+	for i := 0; i+10 < len(s); i++ {
+		if s[i] == '"' && i+6 < len(s) && s[i+1] == 't' {
+			if len(s) >= i+15 && s[i:i+7] == `"type"` {
+				rest := s[i+7:]
+				// cari "ping" setelahnya
+				for j := 0; j < len(rest)-4; j++ {
+					if rest[j] == '"' && j+5 < len(rest) && rest[j:j+6] == `"ping"` {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func wsURL(base string) string {
+	switch {
+	case strings.HasPrefix(base, "http://"):
+		return "ws://" + strings.TrimPrefix(base, "http://")
+	case strings.HasPrefix(base, "https://"):
+		return "wss://" + strings.TrimPrefix(base, "https://")
+	default:
+		return "ws://" + base
 	}
 }
 

@@ -1,14 +1,19 @@
 COMPOSE_FILE := docker-compose.yml
 GPU_FILE := docker-compose.gpu.yml
+SOVITS_FILE := docker-compose.sovits.yml
+PROD_FILE := docker-compose.prod.yml
+
 MODEL ?= $(shell grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2)
 MODEL := $(if $(MODEL),$(MODEL),qwen3:8b)
 
 .PHONY: help up up-gpu down logs ps status pull-models doctor audisi piper bench-tts sovits sovits-down sovits-down-ollama skor pitch
 
 help:
-	@echo "make up          — nyalakan stack (CPU-safe)"
-	@echo "make up-gpu      — nyalakan dengan reservasi GPU untuk Ollama"
+	@echo "make up      	— nyalakan aplikasi"
+	@echo "make up-prod 	- nyalakan aplikasi prod"
+	@echo "make build       — build container"
 	@echo "make down        — matikan stack"
+	@echo "make down-prod 	— matikan stack prod"
 	@echo "make logs        — ikuti log semua layanan"
 	@echo "make ps          — daftar container"
 	@echo "make status      — kesehatan layanan + GPU"
@@ -20,13 +25,19 @@ help:
 	@echo "make bench-tts ENGINE=mms|piper|all"
 
 up:
-	docker compose up -d --build
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) up -d
 
-up-gpu:
-	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) up -d --build
+up-prod:
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) -f $(PROD_FILE) up -d
 
 down:
-	docker compose down
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) down
+
+down-prod:
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) -f $(PROD_FILE) down
+
+build:
+	docker compose -f $(COMPOSE_FILE) -f $(GPU_FILE) -f $(SOVITS_FILE) build
 
 logs:
 	docker compose logs -f --tail=100

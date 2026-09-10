@@ -11,12 +11,12 @@ avatar VRM menjawab bersuara Bahasa Indonesia.
 | Step | Deliverable | Status |
 |---|---|---|
 | 0 | Workflow opencode + docker compose + stub layanan sehat | ✅ selesai |
-| 1 | Benchmark TTS Indonesia (gerbang ≥ 3.5) — eSpeech dulu, alternatif via model-ops jika gagal | ⬜ |
-| 2 | Pipeline stub→nyata di ai-service: whisper small + Ollama qwen3:8b + TTS terpilih | ⬜ |
-| 3 | Gateway relay nyata sesuai protocol-contract v1 | ⬜ |
-| 4 | Frontend: chat + mic + avatar VRM + lip-sync amplitudo | ⬜ |
-| 5 | Tuning latency streaming per kalimat | ⬜ |
-| 6 | Benchmark latency p95 < 2 detik (gerbang) | ⬜ |
+| 1 | Benchmark TTS Indonesia (gerbang ≥ 3.5) — eSpeech dulu, alternatif via model-ops jika gagal | ✅ 5 jalur gagal gerbang → interim sovits-zeta EN (D11) |
+| 2 | Pipeline stub→nyata di ai-service: whisper small + Ollama qwen3:8b + TTS terpilih | ✅ pipeline nyata + `think:false` |
+| 3 | Gateway relay nyata sesuai protocol-contract v1 | ✅ WS relay bidi, protocol v1 kontrak 4-file |
+| 4 | Frontend: chat JSON + mic hold-to-talk + avatar VRM placeholder + AnalyserNode lip-sync | ✅ App.tsx typed + useAudioQueue + useMicCapture + AvatarCanvas |
+| 5 | Tuning latency streaming per kalimat | 🔄 p95 2.96s (GPU) — perlu streaming TTS paralel llm_sentence |
+| 6 | Benchmark latency p95 < 2 detik (gerbang) | ⏳ n=10, GPU 35 t/s, belum lolos (detail di benchmarks/HASIL.md) |
 
 **Gerbang keluar Fase 0**: STT WER < 10% · LLM persona ≥ 4.0 · latency p95 < 2s — dalam sesi uji
 10 menit tanpa crash. *Gate TTS-ID ditunda sementara (keputusan interim D11: voice English via

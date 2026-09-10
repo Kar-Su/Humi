@@ -1,12 +1,13 @@
-name: humi-experiment
+name: ${COMPOSE_PROJECT_NAME:-humi}
 
 services:
   sovits:
     image: xxxxrt666/gpt-sovits:latest-cu126
     container_name: humi-sovits
+    networks: [humi-net]
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9880:9880"
+      - "9880:9880"
     environment:
       is_half: "False"
     volumes:

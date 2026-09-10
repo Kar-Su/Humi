@@ -33,10 +33,11 @@ func main() {
 	select {
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("gateway berhenti: %v", err)
+			log.Fatalf("[gateway] berhenti: %v", err)
 		}
+		log.Println("[gateway] server closed")
 	case <-ctx.Done():
-		log.Println("sinyal diterima, mematikan gateway")
+		log.Println("[gateway] sinyal diterima, mematikan gateway")
 		srv.Shutdown(5 * time.Second)
 	}
 }

@@ -216,3 +216,44 @@ Isi kolom Skor setelah mendengarkan out/<engine>/NN.wav.
 | wikidepia | 10 | 0.276 | 5.69 | |
 | wikidepia | 11 | 0.204 | 4.73 | |
 | wikidepia | 12 | 0.192 | 5.45 | |
+
+## Latency Fase 0 — 2026-09-03 10:00 WIB (think:false, qwen3:8b)
+
+**Metode**: `ws://localhost:8080/ws` via `benchmarks/smoke_pipeline.py` / lat bench script.
+Prompt: `"Hello! Tell me a short funny story."` — ukur `text send → first tts_start` (audio pertama siap diputar).
+`think:false` (qwen3 thinking dimatikan, sudah di-patch di `ai-service/app/llm.py`).
+
+### Hasil 1 — CPU only (tanpa GPU overlay, 7-8 t/s)
+
+```
+n=10  median=4.480  p95=5.716  min=4.207  max=10.788  (detik)
+run: 10.788, 4.545, 4.212, 4.362, 4.207, 4.876, 5.050, 4.387, 4.416, 5.716
+GATE p95<2s: GAGAL
+```
+
+### Hasil 2 — GPU (RTX 4060 Laptop, CUDA 8.9, Ollama 35.7 t/s, VRAM 6.7/8.2 GB)
+
+```
+n=10  median=2.722  p95=2.964  min=2.421  max=4.684
+run: 4.684, 2.654, 2.801, 2.789, 2.421, 2.483, 2.896, 2.575, 2.964, 2.603
+GATE p95<2s: GAGAL (selisih ~1s)
+```
+
+### Breakdown per komponen (GPU, n=5)
+
+| run | llm_sentence pertama | tts_start pertama | delta tts |
+|---|---|---|---|
+| 1 | 2.922s | 5.025s | 2.103s |
+| 2 | 1.393s | 2.709s | 1.316s |
+| 3 | 1.416s | 3.181s | 1.765s |
+| 4 | 1.660s | 3.619s | 1.959s |
+| 5 | 1.484s | 2.848s | 1.365s |
+
+**Analisis**: total ≈ llm_first (1.4-1.6s) + tts_first (1.3-2.0s). LLM sudah GPU 35 t/s tapi prompt eval + first token masih ~1.5s. TTS sovits RTF ~0.2 (dari tabel di atas) tapi round-trip HTTP + framing ~1.5s/sentence. Pipeline `run_turn` saat ini sequential per kalimat (LLM kalimat → TTS kalimat → next). Frontend sudah streaming per kalimat, tidak menunggu `turn_end`.
+
+**Jalan ke <2s** (belum dikerjakan):
+- TTS paralel: mulai synthesize kalimat-1 saat LLM generate kalimat-2 (pipeline tidak sequential, butuh queue).
+- Model lebih kecil: `qwen3:4b` atau `qwen3:1.7b` (first token lebih cepat, tradeoff persona).
+- TTS lebih cepat: distil / streaming chunk sovits (fragment_interval tuning).
+
+**Kesimpulan gate Fase 0**: fungsional E2E hijau (session_ready → llm_sentence → tts → turn_end), tapi latency gate belum lolos. Fase E dicatat sebagai 🔄/⏳ di roadmap.
