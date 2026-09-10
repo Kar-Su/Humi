@@ -6,11 +6,10 @@ import time
 
 import httpx
 
-logger = logging.getLogger("ai-service.llm.ollama")
-
 from app.llm.base import parse_emotion, split_sentence
 from app.persona import build_messages
 
+logger = logging.getLogger("ai-service.llm.ollama")
 
 class OllamaLLM:
     def __init__(self, base_url: str, model: str) -> None:
@@ -18,7 +17,12 @@ class OllamaLLM:
         self.model = model
 
     async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
-        logger.info("[llm.ollama] stream start model=%s base=%s history_len=%d", self.model, self.base_url, len(history))
+        logger.info(
+            "[llm.ollama] stream start model=%s base=%s history_len=%d",
+            self.model,
+            self.base_url,
+            len(history),
+        )
         t0 = time.monotonic()
         payload = {
             "model": self.model,
@@ -45,7 +49,12 @@ class OllamaLLM:
                             logger.info("[llm.ollama] interrupted chunks=%d", chunk_count)
                             break
                         if chunk.get("done"):
-                            logger.info("[llm.ollama] done chunks=%d seq=%d elapsed=%.2fs", chunk_count, seq, time.monotonic() - t0)
+                            logger.info(
+                                "[llm.ollama] done chunks=%d seq=%d elapsed=%.2fs",
+                                chunk_count,
+                                seq,
+                                time.monotonic() - t0,
+                            )
                             break
                         delta = chunk.get("message", {}).get("content", "")
                         if delta:
@@ -55,15 +64,32 @@ class OllamaLLM:
                         if sentence:
                             emotion, clean = parse_emotion(sentence)
                             seq += 1
-                            logger.info("[llm.ollama] sentence seq=%d emotion=%s text=%r", seq, emotion, clean[:60])
+                            logger.info(
+                                "[llm.ollama] sentence seq=%d emotion=%s text=%r",
+                                seq,
+                                emotion,
+                                clean[:60],
+                            )
                             await on_sentence(seq, clean.strip(), emotion)
                             buffer = rest
             if buffer.strip() and not is_interrupted():
                 seq += 1
                 emotion, clean = parse_emotion(buffer)
-                logger.info("[llm.ollama] flush seq=%d emotion=%s text=%r", seq, emotion, clean[:60])
+                logger.info(
+                    "[llm.ollama] flush seq=%d emotion=%s text=%r", seq, emotion, clean[:60]
+                )
                 await on_sentence(seq, clean.strip(), emotion)
-            logger.info("[llm.ollama] stream done chunks=%d seq=%d elapsed=%.2fs", chunk_count, seq, time.monotonic() - t0)
+            logger.info(
+                "[llm.ollama] stream done chunks=%d seq=%d elapsed=%.2fs",
+                chunk_count,
+                seq,
+                time.monotonic() - t0,
+            )
         except Exception as e:
-            logger.error("[llm.ollama] stream failed: %s elapsed=%.2fs", e, time.monotonic() - t0, exc_info=True)
+            logger.error(
+                "[llm.ollama] stream failed: %s elapsed=%.2fs",
+                e,
+                time.monotonic() - t0,
+                exc_info=True,
+            )
             raise

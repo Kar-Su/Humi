@@ -1,6 +1,7 @@
 """RED phase: failing tests for pure logic gaps.
 These must FAIL before GREEN fix — proving TDD gate works.
 """
+
 import pytest
 
 from app import protocol

@@ -4,7 +4,6 @@ import { Toast } from "./components/Toast";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useMicCapture } from "./hooks/useMicCapture";
 import { useToast } from "./hooks/useToast";
-import { logger } from "./lib/logger";
 import type { Emotion, Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
@@ -68,7 +67,6 @@ export default function App() {
       setStatus("menyambung");
       const proto = location.protocol === "https:" ? "wss" : "ws";
       const url = `${proto}://${location.host}/ws`;
-      logger.ws.info("connect", url, `attempt=${attempt + 1}`);
       ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       socketRef.current = ws;
@@ -76,61 +74,47 @@ export default function App() {
       ws.onopen = () => {
         attempt = 0;
         setStatus("terhubung");
-        logger.ws.info("open", url);
         clearPing();
         pingTimer = window.setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             try {
               ws.send(JSON.stringify({ type: "ping" }));
-              logger.ws.debug("ping sent");
-            } catch (e) {
-              logger.ws.warn("ping send failed", e);
-            }
+            } catch {}
           }
         }, 25000);
       };
 
       ws.onclose = (ev) => {
         clearPing();
-        logger.ws.warn("close", `code=${ev.code} reason=${ev.reason} clean=${ev.wasClean}`);
         if (socketRef.current === ws) socketRef.current = null;
         if (cancelled) {
           setStatus("terputus");
           return;
         }
         if (ev.code !== 1000)
-          toastRef.current.show(`WS terputus (code ${ev.code}) — reconnect...`, 3000);
+          toastRef.current.show(`WS terputus (code ${ev.code}) - reconnect...`, 3000);
         scheduleReconnect();
       };
 
-      ws.onerror = (ev) => {
-        logger.ws.error("error", ev);
+      ws.onerror = () => {
         setStatus("terputus");
       };
 
       ws.onmessage = (event: MessageEvent) => {
         if (event.data instanceof ArrayBuffer) {
-          const len = (event.data as ArrayBuffer).byteLength;
-          logger.ws.debug("recv binary", `len=${len}`);
           aqRef.current.onFrame(event.data as ArrayBuffer);
           return;
         }
         if (typeof event.data === "string") {
           const raw = event.data as string;
-          logger.ws.debug("recv text", raw.slice(0, 300));
           let msg: Outbound;
           try {
             msg = JSON.parse(raw) as Outbound;
           } catch {
-            logger.ws.warn("recv non-JSON", raw.slice(0, 200));
             toastRef.current.show(raw as string, 3000);
             return;
           }
-          if ((msg as unknown as { type: string }).type === "pong") {
-            logger.ws.debug("pong received");
-            return;
-          }
-          logger.ws.info("recv", `type=${msg.type}`);
+          if (msg.type === "pong") return;
           if (msg.type === "llm_sentence") {
             const emo = (msg.emotion ?? "netral") as Emotion;
             setTimeout(() => setEmotion(emo), 300);
@@ -143,11 +127,8 @@ export default function App() {
           } else if (msg.type === "tts_end") {
             aqRef.current.onTtsEnd(msg.seq);
           } else if (msg.type === "turn_end") {
-            logger.ws.info("turn_end");
           } else if (msg.type === "session_ready") {
-            logger.ws.info("session_ready", msg.config);
           } else if (msg.type === "error") {
-            logger.ws.error("server error", msg.message);
             toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
           } else if (msg.type === "stt_final") {
             setPesan((prev) => [
@@ -180,58 +161,37 @@ export default function App() {
     const teks = draft.trim();
     if (!teks) return;
     const ws = socketRef.current;
-    logger.ws.info("kirim attempt", `text="${teks.slice(0, 80)}" wsState=${ws?.readyState}`);
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       const state = ws
         ? (["menyambung", "terhubung", "menutup", "terputus"][ws.readyState] ??
           String(ws.readyState))
         : "tanpa koneksi";
-      logger.ws.warn("kirim blocked — not open", `state=${state}`);
-      // badge desync: status masih "terhubung" tapi socket sudah menutup/tertutup
-      // sync badge segera + tutup socket biar onclose → reconnect terjadwal
       setStatus("terputus");
-      if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+      if (ws) {
         try {
           ws.close();
-        } catch {
-          // ignore
-        }
-      } else if (ws) {
-        try {
-          ws.close();
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
-      toast.show(`Belum terhubung (ws: ${state}) — reconnect...`, 3000);
+      toast.show(`Belum terhubung (ws: ${state}) - reconnect...`, 3000);
       return;
     }
     aqRef.current.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     try {
-      const payload = JSON.stringify({ type: "text", text: teks });
-      ws.send(payload);
-      logger.ws.info("kirim sent", `len=${payload.length}`);
-    } catch (e) {
-      logger.ws.error("kirim failed", e);
-      toast.show("Gagal kirim — koneksi terputus, coba lagi", 3000);
+      ws.send(JSON.stringify({ type: "text", text: teks }));
+    } catch {
+      toast.show("Gagal kirim - koneksi terputus, coba lagi", 3000);
       setStatus("terputus");
       try {
         ws.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       return;
     }
     setDraft("");
   };
 
   const interupsi = () => {
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
-      logger.ws.warn("interupsi blocked — not open");
-      return;
-    }
-    logger.ws.info("interupsi sent");
+    if (socketRef.current?.readyState !== WebSocket.OPEN) return;
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
     aqRef.current.interrupt();
     setEmotion("netral");
@@ -239,21 +199,17 @@ export default function App() {
 
   const mulaiRec = async () => {
     if (status !== "terhubung" || rec) return;
-    logger.audio.info("mic start");
     try {
       aqRef.current.interrupt();
       await mic.start();
       setRec(true);
-      logger.audio.info("mic started");
     } catch (e) {
-      logger.audio.error("mic error", e);
       toast.show("mic error: izin ditolak", 3000);
     }
   };
 
   const selesaiRec = () => {
     if (!rec) return;
-    logger.audio.info("mic stop");
     setRec(false);
     mic.stop();
   };
@@ -271,7 +227,7 @@ export default function App() {
       <section className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
         {pesan.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            Fase C — ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
+            Fase C - ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
           </p>
         ) : (
           <ul className="space-y-2">

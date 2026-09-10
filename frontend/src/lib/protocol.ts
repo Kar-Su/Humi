@@ -18,7 +18,8 @@ export type Outbound =
   | { type: "tts_start"; seq: number; format: string; sample_rate: number }
   | { type: "tts_end"; seq: number }
   | { type: "turn_end" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "pong" };
 
 // Header audio biner: [seq u32 LE][len u32 LE][payload]
 export const HEADER_BYTES = 8;
