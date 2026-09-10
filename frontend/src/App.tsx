@@ -30,6 +30,7 @@ export default function App() {
   const [rec, setRec] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const idBerikut = useRef(0);
+  const typingControlRef = useRef<{ clearAll: () => void } | null>(null);
 
   const aq = useAudioQueue();
   const aqRef = useRef(aq);
@@ -106,16 +107,30 @@ export default function App() {
         setStatus("terputus");
       };
 
+      const TTS_LEAD_MS = 1500;
       const pendingText = new Map<number, { text: string; emotion: Emotion }>();
       let typingTimer: number | null = null;
       const typingQueue: Array<{ text: string; emotion: Emotion; duration: number }> = [];
       let isTyping = false;
+      const typingDelayTimers: number[] = [];
       const clearTyping = () => {
         if (typingTimer !== null) {
           clearInterval(typingTimer);
           typingTimer = null;
         }
         isTyping = false;
+      };
+      const clearPendingDelays = () => {
+        for (const t of typingDelayTimers) clearTimeout(t);
+        typingDelayTimers.length = 0;
+      };
+      typingControlRef.current = {
+        clearAll: () => {
+          clearTyping();
+          clearPendingDelays();
+          typingQueue.length = 0;
+          pendingText.clear();
+        },
       };
       const drainQueue = () => {
         if (isTyping || typingQueue.length === 0) return;
@@ -189,7 +204,13 @@ export default function App() {
               }
             }
             const chunkText = parts.join(" ");
-            if (chunkText) startTyping(chunkText, (chunkEmo ?? "netral") as Emotion, dur);
+            if (chunkText) {
+              const tid = window.setTimeout(
+                () => startTyping(chunkText, (chunkEmo ?? "netral") as Emotion, dur),
+                TTS_LEAD_MS,
+              );
+              typingDelayTimers.push(tid);
+            }
             return;
           }
           if (msg.type === "tts_end") {
@@ -198,21 +219,20 @@ export default function App() {
           }
           if (msg.type === "turn_end") {
             if (pendingText.size > 0) {
-              for (const [, v] of Array.from(pendingText.entries())) {
-                const emo = v.emotion as Emotion;
-                setEmotion(emo);
-                setPesan((prev) => [
-                  ...prev,
-                  { id: idBerikut.current++, kind: "ai", teks: v.text, emotion: emo },
-                ]);
+              for (const v of pendingText.values()) {
+                typingQueue.push({ text: v.text, emotion: v.emotion as Emotion, duration: 0 });
               }
               pendingText.clear();
+              drainQueue();
             }
-            clearTyping();
             return;
           }
           if (msg.type === "session_ready") return;
           if (msg.type === "error") {
+            clearTyping();
+            clearPendingDelays();
+            typingQueue.length = 0;
+            pendingText.clear();
             toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
             return;
           }
@@ -231,6 +251,7 @@ export default function App() {
     return () => {
       cancelled = true;
       clearPing();
+      typingControlRef.current?.clearAll();
       if (reconnectTimer !== null) clearTimeout(reconnectTimer);
       if (ws) {
         try {
@@ -262,6 +283,7 @@ export default function App() {
       return;
     }
     aqRef.current.ensureCtx();
+    typingControlRef.current?.clearAll();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     try {
       ws.send(JSON.stringify({ type: "text", text: teks, lang }));
@@ -280,6 +302,7 @@ export default function App() {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return;
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
     aqRef.current.interrupt();
+    typingControlRef.current?.clearAll();
     setEmotion("netral");
   };
 
