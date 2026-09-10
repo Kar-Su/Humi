@@ -11,12 +11,15 @@ from app.persona import build_messages
 
 logger = logging.getLogger("ai-service.llm.ollama")
 
+
 class OllamaLLM:
     def __init__(self, base_url: str, model: str) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
 
-    async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
+    async def stream(
+        self, history: list[dict], on_sentence, is_interrupted, lang: str = "id"
+    ) -> None:
         logger.info(
             "[llm.ollama] stream start model=%s base=%s history_len=%d",
             self.model,
@@ -26,7 +29,7 @@ class OllamaLLM:
         t0 = time.monotonic()
         payload = {
             "model": self.model,
-            "messages": build_messages(history),
+            "messages": build_messages(history, lang),
             "stream": True,
             "think": False,
         }

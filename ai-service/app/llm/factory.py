@@ -34,14 +34,16 @@ class AutoLLM:
         self.providers = providers
         self.model = providers[0].model if providers else "auto"
 
-    async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
+    async def stream(
+        self, history: list[dict], on_sentence, is_interrupted, lang: str = "id"
+    ) -> None:
         last_err: Exception | None = None
         for p in self.providers:
             if not _bucket.allow():
                 last_err = RateLimitError("client bucket 30 RPM exceeded")
                 continue
             try:
-                await p.stream(history, on_sentence, is_interrupted)
+                await p.stream(history, on_sentence, is_interrupted, lang)
                 return
             except RateLimitError as e:
                 last_err = e

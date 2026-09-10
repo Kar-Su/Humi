@@ -21,6 +21,7 @@ fix/<topik>  ← idem untuk perbaikan.
 3. Buka PR `developer → main`: `gh pr create --base main --head developer`.
 4. Merge dengan **squash**: `gh pr merge --squash` — 1 PR = 1 commit bersih di main.
 5. Sinkronkan kembali: `git checkout developer && git pull origin main` (atau fetch+rebase).
+6. Contoh head pesan commit: `feat(llm): Add RAG as their memory`
 
 ## Aturan Keras untuk Agent
 
@@ -31,6 +32,7 @@ fix/<topik>  ← idem untuk perbaikan.
 - Jangan commit: `.env`, berkas model (*.vrm/*.pth/*.ckpt), cache, node_modules
   (sudah dicakup .gitignore — tetap cek `git status` sebelum add).
 - Pesan Commit harus bahasa inggris
+- Jangan menggunakan emoji, em dash, dan AI slop lainnya.
 
 ## Pola gh CLI
 

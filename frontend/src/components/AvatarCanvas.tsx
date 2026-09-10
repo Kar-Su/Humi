@@ -18,9 +18,7 @@ export function AvatarCanvas({
   return (
     <div className="flex h-32 w-full items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/60 text-5xl">
       <span title={emotion}>{glyph[emotion] ?? "😐"}</span>
-      <span className="ml-3 text-sm text-neutral-500">
-        avatar 3D offline - chat & suara tetap jalan
-      </span>
+      <span className="ml-3 text-sm text-neutral-500">avatar 3D offline</span>
     </div>
   );
 }

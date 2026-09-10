@@ -16,7 +16,7 @@ logger = logging.getLogger("ai-service.pipeline")
 
 
 class Pipeline:
-    def __init__(self, emit, emit_audio) -> None:
+    def __init__(self, emit, emit_audio, lang: str = "id") -> None:
         logger.info("[pipeline] __init__ start")
         t0 = time.monotonic()
         self.emit = emit
@@ -25,24 +25,29 @@ class Pipeline:
         logger.info(
             "[pipeline] llm ready model=%s elapsed=%.2fs", self.llm.model, time.monotonic() - t0
         )
+        self.lang = lang if lang in ("id", "en") else "id"
         self.mood = MoodState()
         self.stt = STT(model=os.environ.get("WHISPER_MODEL", "small"))
         logger.info("[pipeline] stt ready elapsed=%.2fs", time.monotonic() - t0)
         try:
-            self.tts = TTS(os.environ.get("SOVITS_URL", "http://host.docker.internal:9880"))
+            self.tts = TTS()
             logger.info("[pipeline] tts ready elapsed=%.2fs", time.monotonic() - t0)
         except Exception as e:
             logger.warning("[pipeline] tts init failed, pakai dummy: %s", e)
-            self.tts = TTS.__new__(TTS)
-            self.tts.base = os.environ.get("SOVITS_URL", "http://host.docker.internal:9880").rstrip(
-                "/"
-            )
-            self.tts.tts_url = self.tts.base + "/tts"
+            self.tts = TTS.__new__(TTS)  # type: ignore[attr-defined]
+            self.tts.api_key = os.environ.get("FISH_API_KEY", "")  # type: ignore[attr-defined]
+            self.tts.ref_id = os.environ.get(
+                "FISH_REFERENCE_ID", "b8357529925148c3909f583caf29c33c"
+            )  # type: ignore[attr-defined]
+            self.tts.model = os.environ.get("FISH_MODEL", "").strip()  # type: ignore[attr-defined]
+            self.tts.base = os.environ.get("FISH_API_BASE", "https://api.fish.audio").rstrip("/")  # type: ignore[attr-defined]
         self.history: list[dict] = []
         self.audio = bytearray()
         self.audio_rate = 16000
         self.interrupted = False
-        logger.info("[pipeline] __init__ done elapsed=%.2fs", time.monotonic() - t0)
+        logger.info(
+            "[pipeline] __init__ done lang=%s elapsed=%.2fs", self.lang, time.monotonic() - t0
+        )
 
     async def start(self) -> None:
         await self.emit(
@@ -61,6 +66,8 @@ class Pipeline:
             msg.type,
             (msg.text[:80] + "…") if msg.text and len(msg.text) > 80 else msg.text,
         )
+        if msg.lang in ("id", "en"):
+            self.lang = msg.lang
         if msg.type == "interrupt":
             logger.info("[pipeline] interrupt")
             self.interrupted = True
@@ -131,7 +138,9 @@ class Pipeline:
             logger.info("[pipeline] tts audio sent seq=%d", seq)
 
         try:
-            await self.llm.stream(self.history, on_sentence, lambda: self.interrupted)
+            await self.llm.stream(
+                self.history, on_sentence, lambda: self.interrupted, lang=self.lang
+            )
             logger.info(
                 "[pipeline] llm.stream done sentences=%d elapsed=%.2fs",
                 len(full),

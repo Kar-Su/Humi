@@ -19,6 +19,12 @@ const gayaStatus: Record<Status, string> = {
 
 export default function App() {
   const [status, setStatus] = useState<Status>("menyambung");
+  const [lang, setLang] = useState<"id" | "en">(
+    () => (localStorage.getItem("humi_lang") as "id" | "en" | null) ?? "id",
+  );
+  useEffect(() => {
+    localStorage.setItem("humi_lang", lang);
+  }, [lang]);
   const [pesan, setPesan] = useState<Pesan[]>([]);
   const [draft, setDraft] = useState("");
   const [rec, setRec] = useState(false);
@@ -178,7 +184,7 @@ export default function App() {
     aqRef.current.ensureCtx();
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     try {
-      ws.send(JSON.stringify({ type: "text", text: teks }));
+      ws.send(JSON.stringify({ type: "text", text: teks, lang }));
     } catch {
       toast.show("Gagal kirim - koneksi terputus, coba lagi", 3000);
       setStatus("terputus");
@@ -217,9 +223,29 @@ export default function App() {
   return (
     <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
       <Toast items={toast.items} />
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Humi {aq.isSpeaking ? "🔊" : ""}</h1>
-        <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>WS: {status}</span>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-full border border-neutral-700 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setLang("id")}
+              className={`rounded-full px-3 py-1 ${lang === "id" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
+            >
+              ID
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang("en")}
+              className={`rounded-full px-3 py-1 ${lang === "en" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
+            >
+              EN
+            </button>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>
+            WS: {status}
+          </span>
+        </div>
       </header>
 
       <AvatarCanvas emotion={emotion} analyser={aq.analyser} />

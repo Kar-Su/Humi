@@ -28,5 +28,6 @@ class RateLimitError(Exception):
 class LLMProvider(Protocol):
     model: str
 
-    async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
-        ...
+    async def stream(
+        self, history: list[dict], on_sentence, is_interrupted, lang: str = "id"
+    ) -> None: ...

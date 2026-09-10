@@ -18,6 +18,7 @@ class Inbound(BaseModel):
     format: str | None = None
     sample_rate: int | None = None
     seq: int | None = None
+    lang: str | None = None
 
 
 class Config(BaseModel):

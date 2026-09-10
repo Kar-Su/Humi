@@ -5,7 +5,7 @@ export const EMOTIONS = ["netral", "senang", "sedih", "kaget", "penasaran"] as c
 export type Emotion = (typeof EMOTIONS)[number];
 
 export type Inbound =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; lang?: "id" | "en" }
   | { type: "audio_start"; format: string; sample_rate: number }
   | { type: "audio_chunk"; seq: number }
   | { type: "audio_end" }

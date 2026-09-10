@@ -11,6 +11,7 @@ from app.persona import build_messages
 
 logger = logging.getLogger("ai-service.llm.openrouter")
 
+
 class OpenRouterLLM:
     def __init__(self, api_key: str, model: str) -> None:
         if not api_key:
@@ -18,12 +19,14 @@ class OpenRouterLLM:
         self.api_key = api_key
         self.model = model
 
-    async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
+    async def stream(
+        self, history: list[dict], on_sentence, is_interrupted, lang: str = "id"
+    ) -> None:
         logger.info(
             "[llm.openrouter] stream start model=%s history_len=%d", self.model, len(history)
         )
         t0 = time.monotonic()
-        payload = {"model": self.model, "messages": build_messages(history), "stream": True}
+        payload = {"model": self.model, "messages": build_messages(history, lang), "stream": True}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://github.com/Kar-Su/Humi",
