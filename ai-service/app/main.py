@@ -46,7 +46,12 @@ async def session(ws: WebSocket) -> None:
             elif raw.get("text"):
                 txt = raw["text"]
                 preview = txt[:200] + "…" if len(txt) > 200 else txt
-                logger.info("[ws] recv text len=%d msg=%s elapsed=%.1fs", len(txt), preview, time.monotonic() - t0)
+                logger.info(
+                    "[ws] recv text len=%d msg=%s elapsed=%.1fs",
+                    len(txt),
+                    preview,
+                    time.monotonic() - t0,
+                )
                 try:
                     msg = protocol.Inbound.model_validate_json(txt)
                 except Exception as e:

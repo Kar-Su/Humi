@@ -31,11 +31,16 @@ def main() -> None:
                 cmd = [
                     str(RUNNER),
                     str(SCRIPT),
-                    "--input", str(src),
-                    "--output", str(out.resolve()),
-                    "--model", str(model.resolve()),
-                    "--device", "cpu",
-                    "--pitch", str(pitch),
+                    "--input",
+                    str(src),
+                    "--output",
+                    str(out.resolve()),
+                    "--model",
+                    str(model.resolve()),
+                    "--device",
+                    "cpu",
+                    "--pitch",
+                    str(pitch),
                 ]
                 if index:
                     cmd += ["--index", index]

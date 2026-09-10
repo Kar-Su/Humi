@@ -12,8 +12,8 @@ _TAPESTRY = re.compile(r"\btapestry\b", re.IGNORECASE)
 _ELLIPSIS = re.compile(r"\.{4,}")
 _DBL_SPACE = re.compile(r" {2,}")
 
+
 def deslop(text: str) -> str:
-    # ponytail: regex only now, LLM judge when slop evades regex
     text = _EM.sub(", ", text)
     text = _AS_AI.sub("", text)
     text = _FIRSTLY.sub("", text)

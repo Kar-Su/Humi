@@ -19,7 +19,12 @@ class STT:
 
     def _ensure(self):
         if self._model is None:
-            logger.info("[stt] loading WhisperModel model=%s device=%s compute=%s", self.model, self.device, self.compute_type)
+            logger.info(
+                "[stt] loading WhisperModel model=%s device=%s compute=%s",
+                self.model,
+                self.device,
+                self.compute_type,
+            )
             t0 = time.monotonic()
             from faster_whisper import WhisperModel
 
@@ -37,5 +42,7 @@ class STT:
         audio = np.frombuffer(pcm16, dtype=np.int16).astype(np.float32) / 32768.0
         segments, _ = self._ensure().transcribe(audio, beam_size=1)
         text = " ".join(s.text.strip() for s in segments).strip()
-        logger.info("[stt] transcribe done text=%r elapsed=%.2fs", text[:100], time.monotonic() - t0)
+        logger.info(
+            "[stt] transcribe done text=%r elapsed=%.2fs", text[:100], time.monotonic() - t0
+        )
         return text

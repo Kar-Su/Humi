@@ -5,7 +5,33 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-EMOTIONS = ("netral", "senang", "sedih", "kaget", "penasaran")
+EMOTIONS = (
+    "netral",
+    "happy",
+    "sad",
+    "angry",
+    "excited",
+    "calm",
+    "nervous",
+    "confident",
+    "surprised",
+    "satisfied",
+    "delighted",
+    "scared",
+    "worried",
+    "upset",
+    "frustrated",
+    "depressed",
+    "empathetic",
+    "embarrassed",
+    "disgusted",
+    "moved",
+    "proud",
+    "relaxed",
+    "grateful",
+    "curious",
+    "sarcastic",
+)
 
 # Framing audio biner: [seq u32 LE][len u32 LE][payload]
 _HEADER = struct.Struct("<II")
@@ -18,6 +44,7 @@ class Inbound(BaseModel):
     format: str | None = None
     sample_rate: int | None = None
     seq: int | None = None
+    lang: str | None = None
 
 
 class Config(BaseModel):
@@ -34,11 +61,13 @@ class Outbound(BaseModel):
         "tts_end",
         "turn_end",
         "error",
+        "pong",
     ]
     config: Config | None = None
     text: str | None = None
     emotion: str | None = None
     seq: int | None = None
+    seqs: list[int] | None = None
     format: str | None = None
     sample_rate: int | None = None
     message: str | None = None

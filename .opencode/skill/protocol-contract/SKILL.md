@@ -38,14 +38,16 @@ Satu koneksi WebSocket client↔gateway: `/ws`. Gateway me-relay ke ai-service
 ```json
 {"type": "session_ready", "config": {"model": "qwen3:8b", "voice": "default"}}
 {"type": "stt_final", "text": "halo, apa kabar?"}
-{"type": "llm_sentence", "seq": 1, "text": "Kabar baik!", "emotion": "senang"}
-{"type": "tts_start", "seq": 1, "format": "pcm16le", "sample_rate": 24000}
+{"type": "llm_sentence", "seq": 1, "text": "Kabar baik!", "emotion": "happy"}
+{"type": "tts_start", "seq": 1, "seqs": [1, 2], "format": "pcm16le", "sample_rate": 24000}
 {"type": "tts_end", "seq": 1}
+{"type": "pong"}
 {"type": "turn_end"}
 ```
 
 - Frame biner audio keluaran memakai framing sama seperti masukan (`[seq][len][payload]`).
-- `emotion` ∈ {netral, senang, sedih, kaget, penasaran} — kamus lengkap di skill `persona-prompting`; mapping ke blendshape di skill `avatar-frontend`.
+- `emotion` ∈ Fish S2 Basic 24 + `netral` (tanpa tag): `happy, sad, angry, excited, calm, nervous, confident, surprised, satisfied, delighted, scared, worried, upset, frustrated, depressed, empathetic, embarrassed, disgusted, moved, proud, relaxed, grateful, curious, sarcastic` + `netral`. LLM generate tag Fish langsung, tanpa convert.
+- `Inbound.text` opsional `lang: "id"|"en"` untuk toggle bahasa AI.
 - Satu giliran jawaban = N × (`llm_sentence` → `tts_start` → audio biner → `tts_end`) → ditutup `turn_end`.
 
 ## Endpoint REST Internal (gateway ↔ ai-service)

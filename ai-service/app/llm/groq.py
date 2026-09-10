@@ -6,10 +6,10 @@ import time
 
 import httpx
 
-logger = logging.getLogger("ai-service.llm.groq")
-
 from app.llm.base import RateLimitError, parse_emotion, split_sentence
 from app.persona import build_messages
+
+logger = logging.getLogger("ai-service.llm.groq")
 
 
 class GroqLLM:
@@ -19,10 +19,12 @@ class GroqLLM:
         self.api_key = api_key
         self.model = model
 
-    async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
+    async def stream(
+        self, history: list[dict], on_sentence, is_interrupted, lang: str = "id"
+    ) -> None:
         logger.info("[llm.groq] stream start model=%s history_len=%d", self.model, len(history))
         t0 = time.monotonic()
-        payload = {"model": self.model, "messages": build_messages(history), "stream": True}
+        payload = {"model": self.model, "messages": build_messages(history, lang), "stream": True}
         headers = {"Authorization": f"Bearer {self.api_key}"}
         seq = 0
         buffer = ""
@@ -45,7 +47,12 @@ class GroqLLM:
                         continue
                     data = line[5:].strip()
                     if data == "[DONE]":
-                        logger.info("[llm.groq] DONE chunks=%d seq=%d elapsed=%.2fs", chunk_count, seq, time.monotonic() - t0)
+                        logger.info(
+                            "[llm.groq] DONE chunks=%d seq=%d elapsed=%.2fs",
+                            chunk_count,
+                            seq,
+                            time.monotonic() - t0,
+                        )
                         break
                     try:
                         chunk = json.loads(data)
@@ -58,7 +65,6 @@ class GroqLLM:
                     if not delta:
                         continue
                     chunk_count += 1
-                    # ponytail: Groq Qwen <think> bisa bocor di streaming content
                     if skipping_think:
                         if "</think>" in delta:
                             delta = delta.split("</think>", 1)[1]
@@ -81,7 +87,12 @@ class GroqLLM:
                     if sentence:
                         emotion, clean = parse_emotion(sentence)
                         seq += 1
-                        logger.info("[llm.groq] sentence seq=%d emotion=%s text=%r", seq, emotion, clean[:60])
+                        logger.info(
+                            "[llm.groq] sentence seq=%d emotion=%s text=%r",
+                            seq,
+                            emotion,
+                            clean[:60],
+                        )
                         await on_sentence(seq, clean.strip(), emotion)
                         buffer = rest
         if buffer.strip() and not is_interrupted():
@@ -89,4 +100,10 @@ class GroqLLM:
             emotion, clean = parse_emotion(buffer)
             logger.info("[llm.groq] flush seq=%d emotion=%s text=%r", seq, emotion, clean[:60])
             await on_sentence(seq, clean.strip(), emotion)
-        logger.info("[llm.groq] stream done chunks=%d seq=%d buffer_remain=%d elapsed=%.2fs", chunk_count, seq, len(buffer), time.monotonic() - t0)
+        logger.info(
+            "[llm.groq] stream done chunks=%d seq=%d buffer_remain=%d elapsed=%.2fs",
+            chunk_count,
+            seq,
+            len(buffer),
+            time.monotonic() - t0,
+        )

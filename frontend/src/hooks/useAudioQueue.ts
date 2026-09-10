@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { HEADER_BYTES } from "../lib/protocol";
 import { logger } from "../lib/logger";
+import { HEADER_BYTES } from "../lib/protocol";
 
 export function useAudioQueue() {
   const ctxRef = useRef<AudioContext | null>(null);

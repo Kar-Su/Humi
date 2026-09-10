@@ -28,13 +28,33 @@ const (
 	TypeError        = "error"
 )
 
-// Emosi yang dikenali (kamus di skill persona-prompting).
+// Emosi Fish S2 Basic 24 + netral (tanpa tag).
 const (
-	EmotionNetral    = "netral"
-	EmotionSenang    = "senang"
-	EmotionSedih     = "sedih"
-	EmotionKaget     = "kaget"
-	EmotionPenasaran = "penasaran"
+	EmotionNetral     = "netral"
+	EmotionHappy      = "happy"
+	EmotionSad        = "sad"
+	EmotionAngry      = "angry"
+	EmotionExcited    = "excited"
+	EmotionCalm       = "calm"
+	EmotionNervous    = "nervous"
+	EmotionConfident  = "confident"
+	EmotionSurprised  = "surprised"
+	EmotionSatisfied  = "satisfied"
+	EmotionDelighted  = "delighted"
+	EmotionScared     = "scared"
+	EmotionWorried    = "worried"
+	EmotionUpset      = "upset"
+	EmotionFrustrated = "frustrated"
+	EmotionDepressed  = "depressed"
+	EmotionEmpathetic = "empathetic"
+	EmotionEmbarrassed = "embarrassed"
+	EmotionDisgusted  = "disgusted"
+	EmotionMoved      = "moved"
+	EmotionProud      = "proud"
+	EmotionRelaxed    = "relaxed"
+	EmotionGrateful   = "grateful"
+	EmotionCurious    = "curious"
+	EmotionSarcastic  = "sarcastic"
 )
 
 // Header audio biner: [seq u32 LE][len u32 LE][payload].
@@ -66,7 +86,7 @@ func UnpackAudio(frame []byte) (uint32, []byte, error) {
 // IsValidEmotion cek apakah string adalah emosi valid.
 func IsValidEmotion(e string) bool {
 	switch e {
-	case EmotionNetral, EmotionSenang, EmotionSedih, EmotionKaget, EmotionPenasaran:
+	case EmotionNetral, EmotionHappy, EmotionSad, EmotionAngry, EmotionExcited, EmotionCalm, EmotionNervous, EmotionConfident, EmotionSurprised, EmotionSatisfied, EmotionDelighted, EmotionScared, EmotionWorried, EmotionUpset, EmotionFrustrated, EmotionDepressed, EmotionEmpathetic, EmotionEmbarrassed, EmotionDisgusted, EmotionMoved, EmotionProud, EmotionRelaxed, EmotionGrateful, EmotionCurious, EmotionSarcastic:
 		return true
 	default:
 		return false

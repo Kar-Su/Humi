@@ -76,13 +76,18 @@ func TestUnpackAudio_RejectsEmptyFrame(t *testing.T) {
 }
 
 func TestIsValidEmotion(t *testing.T) {
-	valid := []string{"netral", "senang", "sedih", "kaget", "penasaran"}
+	valid := []string{
+		"netral", "happy", "sad", "angry", "excited", "calm", "nervous", "confident", "surprised",
+		"satisfied", "delighted", "scared", "worried", "upset", "frustrated", "depressed",
+		"empathetic", "embarrassed", "disgusted", "moved", "proud", "relaxed", "grateful",
+		"curious", "sarcastic",
+	}
 	for _, e := range valid {
 		if !IsValidEmotion(e) {
 			t.Fatalf("IsValidEmotion(%q) = false, want true", e)
 		}
 	}
-	invalid := []string{"netral ", "SENANG", "marah", "", "senang "}
+	invalid := []string{"netral ", "HAPPY", "senang", "marah", "", "happy "}
 	for _, e := range invalid {
 		if IsValidEmotion(e) {
 			t.Fatalf("IsValidEmotion(%q) = true, want false", e)

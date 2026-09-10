@@ -4,7 +4,6 @@ import { Toast } from "./components/Toast";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useMicCapture } from "./hooks/useMicCapture";
 import { useToast } from "./hooks/useToast";
-import { logger } from "./lib/logger";
 import type { Emotion, Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
@@ -20,11 +19,20 @@ const gayaStatus: Record<Status, string> = {
 
 export default function App() {
   const [status, setStatus] = useState<Status>("menyambung");
+  const [lang, setLang] = useState<"id" | "en">(
+    () => (localStorage.getItem("humi_lang") as "id" | "en" | null) ?? "id",
+  );
+  useEffect(() => {
+    localStorage.setItem("humi_lang", lang);
+  }, [lang]);
   const [pesan, setPesan] = useState<Pesan[]>([]);
   const [draft, setDraft] = useState("");
   const [rec, setRec] = useState(false);
+  const [isHumiTyping, setIsHumiTyping] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const idBerikut = useRef(0);
+  const typingControlRef = useRef<{ clearAll: () => void } | null>(null);
 
   const aq = useAudioQueue();
   const aqRef = useRef(aq);
@@ -37,6 +45,15 @@ export default function App() {
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll trigger on pesan/isHumiTyping
+  useEffect(() => {
+    sectionRef.current?.scrollTo({ top: sectionRef.current.scrollHeight, behavior: "smooth" });
+  }, [pesan, isHumiTyping]);
+  useEffect(() => {
+    if (!isHumiTyping) return;
+    const t = window.setTimeout(() => setIsHumiTyping(false), 15000);
+    return () => clearTimeout(t);
+  }, [isHumiTyping]);
   const sendJson = useCallback((s: string) => socketRef.current?.send(s), []);
   const sendBin = useCallback((b: ArrayBuffer) => socketRef.current?.send(b), []);
   const mic = useMicCapture(sendJson, sendBin);
@@ -68,7 +85,6 @@ export default function App() {
       setStatus("menyambung");
       const proto = location.protocol === "https:" ? "wss" : "ws";
       const url = `${proto}://${location.host}/ws`;
-      logger.ws.info("connect", url, `attempt=${attempt + 1}`);
       ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       socketRef.current = ws;
@@ -76,80 +92,168 @@ export default function App() {
       ws.onopen = () => {
         attempt = 0;
         setStatus("terhubung");
-        logger.ws.info("open", url);
         clearPing();
         pingTimer = window.setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             try {
               ws.send(JSON.stringify({ type: "ping" }));
-              logger.ws.debug("ping sent");
-            } catch (e) {
-              logger.ws.warn("ping send failed", e);
-            }
+            } catch {}
           }
         }, 25000);
       };
 
       ws.onclose = (ev) => {
         clearPing();
-        logger.ws.warn("close", `code=${ev.code} reason=${ev.reason} clean=${ev.wasClean}`);
         if (socketRef.current === ws) socketRef.current = null;
         if (cancelled) {
           setStatus("terputus");
           return;
         }
         if (ev.code !== 1000)
-          toastRef.current.show(`WS terputus (code ${ev.code}) — reconnect...`, 3000);
+          toastRef.current.show(`WS terputus (code ${ev.code}) - reconnect...`, 3000);
         scheduleReconnect();
       };
 
-      ws.onerror = (ev) => {
-        logger.ws.error("error", ev);
+      ws.onerror = () => {
         setStatus("terputus");
+      };
+
+      const TTS_LEAD_MS = 1500;
+      const pendingText = new Map<number, { text: string; emotion: Emotion }>();
+      let typingTimer: number | null = null;
+      const typingQueue: Array<{ text: string; emotion: Emotion; duration: number }> = [];
+      let isTyping = false;
+      const typingDelayTimers: number[] = [];
+      const clearTyping = () => {
+        if (typingTimer !== null) {
+          clearInterval(typingTimer);
+          typingTimer = null;
+        }
+        isTyping = false;
+      };
+      const clearPendingDelays = () => {
+        for (const t of typingDelayTimers) clearTimeout(t);
+        typingDelayTimers.length = 0;
+      };
+      typingControlRef.current = {
+        clearAll: () => {
+          clearTyping();
+          clearPendingDelays();
+          typingQueue.length = 0;
+          pendingText.clear();
+          setIsHumiTyping(false);
+        },
+      };
+      const drainQueue = () => {
+        if (isTyping || typingQueue.length === 0) return;
+        // biome-ignore lint/style/noNonNullAssertion: guarded by length check above
+        const next = typingQueue.shift()!;
+        isTyping = true;
+        setIsHumiTyping(false);
+        setEmotion(next.emotion);
+        const bubbleId = idBerikut.current++;
+        setPesan((prev) => [
+          ...prev,
+          { id: bubbleId, kind: "ai", teks: "", emotion: next.emotion },
+        ]);
+        const totalMs = Math.max(
+          400,
+          Math.min(4000, next.duration > 0 ? next.duration * 1000 : next.text.length * 40),
+        );
+        const perChar = Math.max(16, Math.min(60, totalMs / Math.max(1, next.text.length)));
+        let idx = 0;
+        typingTimer = window.setInterval(() => {
+          idx += 1;
+          const slice = next.text.slice(0, idx);
+          setPesan((prev) => prev.map((p) => (p.id === bubbleId ? { ...p, teks: slice } : p)));
+          if (idx >= next.text.length) {
+            clearInterval(typingTimer as unknown as number);
+            typingTimer = null;
+            isTyping = false;
+            drainQueue();
+          }
+        }, perChar) as unknown as number;
+      };
+      const startTyping = (chunkText: string, chunkEmotion: Emotion, duration: number) => {
+        if (!chunkText) return;
+        typingQueue.push({ text: chunkText, emotion: chunkEmotion, duration });
+        drainQueue();
       };
 
       ws.onmessage = (event: MessageEvent) => {
         if (event.data instanceof ArrayBuffer) {
-          const len = (event.data as ArrayBuffer).byteLength;
-          logger.ws.debug("recv binary", `len=${len}`);
           aqRef.current.onFrame(event.data as ArrayBuffer);
           return;
         }
         if (typeof event.data === "string") {
           const raw = event.data as string;
-          logger.ws.debug("recv text", raw.slice(0, 300));
           let msg: Outbound;
           try {
             msg = JSON.parse(raw) as Outbound;
           } catch {
-            logger.ws.warn("recv non-JSON", raw.slice(0, 200));
             toastRef.current.show(raw as string, 3000);
             return;
           }
-          if ((msg as unknown as { type: string }).type === "pong") {
-            logger.ws.debug("pong received");
+          if (msg.type === "pong") return;
+          if (msg.type === "llm_sentence") {
+            pendingText.set(msg.seq, {
+              text: msg.text ?? "",
+              emotion: (msg.emotion ?? "netral") as Emotion,
+            });
             return;
           }
-          logger.ws.info("recv", `type=${msg.type}`);
-          if (msg.type === "llm_sentence") {
-            const emo = (msg.emotion ?? "netral") as Emotion;
-            setTimeout(() => setEmotion(emo), 300);
-            setPesan((prev) => [
-              ...prev,
-              { id: idBerikut.current++, kind: "ai", teks: msg.text ?? "", emotion: emo },
-            ]);
-          } else if (msg.type === "tts_start") {
+          if (msg.type === "tts_start") {
             aqRef.current.onTtsStart(msg.seq, msg.sample_rate);
-          } else if (msg.type === "tts_end") {
+            const seqs = (msg as unknown as { seqs?: number[] }).seqs ?? [msg.seq];
+            const dur = (msg as unknown as { duration?: number }).duration ?? 0;
+            const emo = (msg as unknown as { emotion?: string }).emotion as Emotion | undefined;
+            const parts: string[] = [];
+            let chunkEmo: Emotion | undefined = emo as Emotion | undefined;
+            for (const s of seqs) {
+              const p = pendingText.get(s);
+              if (p) {
+                parts.push(p.text);
+                if (!chunkEmo) chunkEmo = p.emotion;
+                pendingText.delete(s);
+              }
+            }
+            const chunkText = parts.join(" ");
+            if (chunkText) {
+              const tid = window.setTimeout(() => {
+                setIsHumiTyping(false);
+                startTyping(chunkText, (chunkEmo ?? "netral") as Emotion, dur);
+              }, TTS_LEAD_MS);
+              typingDelayTimers.push(tid);
+            }
+            return;
+          }
+          if (msg.type === "tts_end") {
             aqRef.current.onTtsEnd(msg.seq);
-          } else if (msg.type === "turn_end") {
-            logger.ws.info("turn_end");
-          } else if (msg.type === "session_ready") {
-            logger.ws.info("session_ready", msg.config);
-          } else if (msg.type === "error") {
-            logger.ws.error("server error", msg.message);
+            return;
+          }
+          if (msg.type === "turn_end") {
+            if (pendingText.size > 0) {
+              for (const v of pendingText.values()) {
+                typingQueue.push({ text: v.text, emotion: v.emotion as Emotion, duration: 0 });
+              }
+              pendingText.clear();
+              drainQueue();
+            } else if (typingQueue.length === 0 && typingDelayTimers.length === 0) {
+              setIsHumiTyping(false);
+            }
+            return;
+          }
+          if (msg.type === "session_ready") return;
+          if (msg.type === "error") {
+            clearTyping();
+            clearPendingDelays();
+            typingQueue.length = 0;
+            pendingText.clear();
+            setIsHumiTyping(false);
             toastRef.current.show(msg.message ?? "Terjadi kesalahan", 3000);
-          } else if (msg.type === "stt_final") {
+            return;
+          }
+          if (msg.type === "stt_final") {
             setPesan((prev) => [
               ...prev,
               { id: idBerikut.current++, kind: "ai", teks: `stt: ${msg.text}`, emotion: "netral" },
@@ -164,6 +268,7 @@ export default function App() {
     return () => {
       cancelled = true;
       clearPing();
+      typingControlRef.current?.clearAll();
       if (reconnectTimer !== null) clearTimeout(reconnectTimer);
       if (ws) {
         try {
@@ -180,80 +285,58 @@ export default function App() {
     const teks = draft.trim();
     if (!teks) return;
     const ws = socketRef.current;
-    logger.ws.info("kirim attempt", `text="${teks.slice(0, 80)}" wsState=${ws?.readyState}`);
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       const state = ws
         ? (["menyambung", "terhubung", "menutup", "terputus"][ws.readyState] ??
           String(ws.readyState))
         : "tanpa koneksi";
-      logger.ws.warn("kirim blocked — not open", `state=${state}`);
-      // badge desync: status masih "terhubung" tapi socket sudah menutup/tertutup
-      // sync badge segera + tutup socket biar onclose → reconnect terjadwal
       setStatus("terputus");
-      if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+      if (ws) {
         try {
           ws.close();
-        } catch {
-          // ignore
-        }
-      } else if (ws) {
-        try {
-          ws.close();
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
-      toast.show(`Belum terhubung (ws: ${state}) — reconnect...`, 3000);
+      toast.show(`Belum terhubung (ws: ${state}) - reconnect...`, 3000);
       return;
     }
     aqRef.current.ensureCtx();
+    typingControlRef.current?.clearAll();
+    setIsHumiTyping(true);
     setPesan((prev) => [...prev, { id: idBerikut.current++, kind: "user", teks }]);
     try {
-      const payload = JSON.stringify({ type: "text", text: teks });
-      ws.send(payload);
-      logger.ws.info("kirim sent", `len=${payload.length}`);
-    } catch (e) {
-      logger.ws.error("kirim failed", e);
-      toast.show("Gagal kirim — koneksi terputus, coba lagi", 3000);
+      ws.send(JSON.stringify({ type: "text", text: teks, lang }));
+    } catch {
+      toast.show("Gagal kirim - koneksi terputus, coba lagi", 3000);
       setStatus("terputus");
       try {
         ws.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       return;
     }
     setDraft("");
   };
 
   const interupsi = () => {
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
-      logger.ws.warn("interupsi blocked — not open");
-      return;
-    }
-    logger.ws.info("interupsi sent");
+    if (socketRef.current?.readyState !== WebSocket.OPEN) return;
     socketRef.current.send(JSON.stringify({ type: "interrupt" }));
     aqRef.current.interrupt();
+    typingControlRef.current?.clearAll();
     setEmotion("netral");
   };
 
   const mulaiRec = async () => {
     if (status !== "terhubung" || rec) return;
-    logger.audio.info("mic start");
     try {
       aqRef.current.interrupt();
       await mic.start();
       setRec(true);
-      logger.audio.info("mic started");
-    } catch (e) {
-      logger.audio.error("mic error", e);
+    } catch {
       toast.show("mic error: izin ditolak", 3000);
     }
   };
 
   const selesaiRec = () => {
     if (!rec) return;
-    logger.audio.info("mic stop");
     setRec(false);
     mic.stop();
   };
@@ -261,17 +344,40 @@ export default function App() {
   return (
     <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
       <Toast items={toast.items} />
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Humi {aq.isSpeaking ? "🔊" : ""}</h1>
-        <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>WS: {status}</span>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-full border border-neutral-700 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setLang("id")}
+              className={`rounded-full px-3 py-1 ${lang === "id" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
+            >
+              ID
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang("en")}
+              className={`rounded-full px-3 py-1 ${lang === "en" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
+            >
+              EN
+            </button>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>
+            WS: {status}
+          </span>
+        </div>
       </header>
 
       <AvatarCanvas emotion={emotion} analyser={aq.analyser} />
 
-      <section className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+      <section
+        ref={sectionRef as unknown as React.RefObject<HTMLDivElement>}
+        className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4"
+      >
         {pesan.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            Fase C — ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
+            Fase C - ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -289,7 +395,27 @@ export default function App() {
                 </li>
               ),
             )}
+            {isHumiTyping && (
+              <li className="mr-10 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
+                <span className="inline-flex gap-0.5">
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce [animation-delay:120ms]">.</span>
+                  <span className="animate-bounce [animation-delay:240ms]">.</span>
+                </span>
+                Humi is typing...
+              </li>
+            )}
           </ul>
+        )}
+        {pesan.length === 0 && isHumiTyping && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
+            <span className="inline-flex gap-0.5">
+              <span className="animate-bounce">.</span>
+              <span className="animate-bounce [animation-delay:120ms]">.</span>
+              <span className="animate-bounce [animation-delay:240ms]">.</span>
+            </span>
+            Humi is typing...
+          </div>
         )}
       </section>
 

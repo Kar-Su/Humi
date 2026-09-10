@@ -1,6 +1,7 @@
 """RED phase: failing tests for pure logic gaps.
 These must FAIL before GREEN fix — proving TDD gate works.
 """
+
 import pytest
 
 from app import protocol
@@ -40,11 +41,11 @@ def test_parse_emotion_rejects_netral_tag():
 
 
 def test_parse_emotion_rejects_uppercase():
-    assert parse_emotion("[SENANG] hai") == ("netral", "[SENANG] hai")
+    assert parse_emotion("[HAPPY] hai") == ("netral", "[HAPPY] hai")
 
 
 def test_parse_emotion_rejects_space_inside_brackets():
-    assert parse_emotion("[senang ] hai") == ("netral", "[senang ] hai")
+    assert parse_emotion("[happy ] hai") == ("netral", "[happy ] hai")
 
 
 def test_parse_emotion_empty_string():
@@ -52,7 +53,7 @@ def test_parse_emotion_empty_string():
 
 
 def test_parse_emotion_only_tag_no_text():
-    assert parse_emotion("[kaget]") == ("kaget", "")
+    assert parse_emotion("[surprised]") == ("surprised", "")
 
 
 def test_split_sentence_ellipsis():
@@ -105,5 +106,31 @@ def test_build_messages_empty_history():
 
 
 def test_protocol_emotions_constant():
-    assert set(protocol.EMOTIONS) == {"netral", "senang", "sedih", "kaget", "penasaran"}
-    assert len(protocol.EMOTIONS) == 5
+    assert set(protocol.EMOTIONS) == {
+        "netral",
+        "happy",
+        "sad",
+        "angry",
+        "excited",
+        "calm",
+        "nervous",
+        "confident",
+        "surprised",
+        "satisfied",
+        "delighted",
+        "scared",
+        "worried",
+        "upset",
+        "frustrated",
+        "depressed",
+        "empathetic",
+        "embarrassed",
+        "disgusted",
+        "moved",
+        "proud",
+        "relaxed",
+        "grateful",
+        "curious",
+        "sarcastic",
+    }
+    assert len(protocol.EMOTIONS) == 25

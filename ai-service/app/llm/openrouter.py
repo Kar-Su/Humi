@@ -6,10 +6,10 @@ import time
 
 import httpx
 
-logger = logging.getLogger("ai-service.llm.openrouter")
-
 from app.llm.base import RateLimitError, parse_emotion, split_sentence
 from app.persona import build_messages
+
+logger = logging.getLogger("ai-service.llm.openrouter")
 
 
 class OpenRouterLLM:
@@ -19,10 +19,14 @@ class OpenRouterLLM:
         self.api_key = api_key
         self.model = model
 
-    async def stream(self, history: list[dict], on_sentence, is_interrupted) -> None:
-        logger.info("[llm.openrouter] stream start model=%s history_len=%d", self.model, len(history))
+    async def stream(
+        self, history: list[dict], on_sentence, is_interrupted, lang: str = "id"
+    ) -> None:
+        logger.info(
+            "[llm.openrouter] stream start model=%s history_len=%d", self.model, len(history)
+        )
         t0 = time.monotonic()
-        payload = {"model": self.model, "messages": build_messages(history), "stream": True}
+        payload = {"model": self.model, "messages": build_messages(history, lang), "stream": True}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://github.com/Kar-Su/Humi",
@@ -47,7 +51,12 @@ class OpenRouterLLM:
                         continue
                     data = line[5:].strip()
                     if data == "[DONE]":
-                        logger.info("[llm.openrouter] DONE chunks=%d seq=%d elapsed=%.2fs", chunk_count, seq, time.monotonic() - t0)
+                        logger.info(
+                            "[llm.openrouter] DONE chunks=%d seq=%d elapsed=%.2fs",
+                            chunk_count,
+                            seq,
+                            time.monotonic() - t0,
+                        )
                         break
                     try:
                         chunk = json.loads(data)
@@ -65,12 +74,24 @@ class OpenRouterLLM:
                     if sentence:
                         emotion, clean = parse_emotion(sentence)
                         seq += 1
-                        logger.info("[llm.openrouter] sentence seq=%d emotion=%s text=%r", seq, emotion, clean[:60])
+                        logger.info(
+                            "[llm.openrouter] sentence seq=%d emotion=%s text=%r",
+                            seq,
+                            emotion,
+                            clean[:60],
+                        )
                         await on_sentence(seq, clean.strip(), emotion)
                         buffer = rest
         if buffer.strip() and not is_interrupted():
             seq += 1
             emotion, clean = parse_emotion(buffer)
-            logger.info("[llm.openrouter] flush seq=%d emotion=%s text=%r", seq, emotion, clean[:60])
+            logger.info(
+                "[llm.openrouter] flush seq=%d emotion=%s text=%r", seq, emotion, clean[:60]
+            )
             await on_sentence(seq, clean.strip(), emotion)
-        logger.info("[llm.openrouter] stream done chunks=%d seq=%d elapsed=%.2fs", chunk_count, seq, time.monotonic() - t0)
+        logger.info(
+            "[llm.openrouter] stream done chunks=%d seq=%d elapsed=%.2fs",
+            chunk_count,
+            seq,
+            time.monotonic() - t0,
+        )

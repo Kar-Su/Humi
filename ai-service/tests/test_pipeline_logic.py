@@ -3,10 +3,10 @@ from app.llm import parse_emotion, split_sentence
 
 
 def test_parse_emotion():
-    assert parse_emotion("[senang] Hai") == ("senang", "Hai")
-    assert parse_emotion("  [kaget]  wow") == ("kaget", "wow")
+    assert parse_emotion("[happy] Hai") == ("happy", "Hai")
+    assert parse_emotion("  [surprised]  wow") == ("surprised", "wow")
     assert parse_emotion("hai biasa") == ("netral", "hai biasa")
-    assert parse_emotion("[sedih]hmm") == ("sedih", "hmm")
+    assert parse_emotion("[sad]hmm") == ("sad", "hmm")
 
 
 def test_split_sentence():

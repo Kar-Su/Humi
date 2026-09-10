@@ -3,12 +3,10 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const domain = process.env.DOMAIN;
-const prodHost =
-  domain && domain !== "localhost" ? `humi.${domain}` : null;
-
+const prodHost = domain && domain !== "localhost" ? `humi.${domain}` : null;
 
 const ipLoggerPlugin = () => ({
-  name: 'ip-logger-plugin',
+  name: "ip-logger-plugin",
   configureServer(server) {
     server.middlewares.use((req, res, next) => {
       const raw =
@@ -24,16 +22,13 @@ const ipLoggerPlugin = () => ({
       next();
     });
   },
-})
-
+});
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), ipLoggerPlugin()],
   server: {
     host: true,
-    allowedHosts: prodHost
-      ? [prodHost, "localhost", "127.0.0.1"]
-      : ["localhost", "127.0.0.1"],
+    allowedHosts: prodHost ? [prodHost, "localhost", "127.0.0.1"] : ["localhost", "127.0.0.1"],
     proxy: {
       "/ws": {
         target: process.env.VITE_GATEWAY_HTTP ?? "http://localhost:8080",
