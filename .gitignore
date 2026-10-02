@@ -7,7 +7,10 @@ dist/
 .ruff_cache/
 
 # Lingkungan & rahasia
+# Vite membaca .env, .env.local, .env.*.local; semuanya bisa berisi token.
 .env
+.env.*
+!.env.example
 !.plan
 
 # Berkas model & aset berat

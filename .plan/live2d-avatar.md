@@ -96,9 +96,13 @@ Hasil eksekusi:
 - Verifikasi: `npm run lint` exit 0 (sisanya 1 warning `res` unused di `vite.config.ts:11` yang pre-existing), `npx tsc --noEmit` exit 0, `npm test` 22 pass / 0 fail, `npm run build` sukses, `npm ci` di container 0 vulnerabilities.
 - **Masalah lingkungan yang ditemukan:** volume `frontend_node_modules` sudah 3 minggu dan **menutup** `npm ci` di Dockerfile, jadi container tidak punya paket Pixi dan Vite balas `Failed to resolve import "@pixi/app"` (HTTP 500). Volume disinkronkan dengan `docker compose exec frontend npm ci`. Kalau `import` baru tidak ketemu di browser padahal ada di host, periksa volume ini dulu.
 - Verifikasi aset via HTTP: `/live2d/hiyori/Hiyori.model3.json` 200, `.moc3` 200, texture 200, motion 200. `Live2DStage.tsx` ter-transform HTTP 200 dengan kelima dynamic import ter-resolve ke chunk Vite terpisah.
-- **Belum terverifikasi: render model sungguhan di browser.** Butuh Chromium (sedang dipasang developer) DAN `live2dcubismcore.min.js` dari SDK resmi yang gated EULA. Yang sudah terbukti secara mekanis: jalur fallback (format default `emoji` tidak pernah menyentuh Pixi) dan urutan load core-sebelum-library.
+- **Verifikasi browser (Chromium, headless) — jalur `emoji` default:** avatar emoji tampil, `WS: terhubung`, **nol request ke chunk Pixi sama sekali** (`canvas` count 0, nol request `/node_modules/.vite/deps/@pixi_*`). Jadi renderer benar-benar tidak terunduh untuk user yang tidak memakai Live2D.
+- **Verifikasi browser — jalur `live2d` dengan Core absen:** 404 `/assets/js/live2dcubismcore.min.js`, loader menolak, avatar jatuh ke emoji dengan pesan yang menyebut path persis, tanpa blank screen, dan Pixi **tidak pernah** ter-import karena kegagalan terjadi sebelum dynamic import.
+- Nol 404 yang tersisa di console sudah diverifikasi pre-existing, bukan dari Sesi B: `favicon.ico` (permintaan default browser, `index.html` memang tidak punya `<link rel=icon>`) dan beacon `cloudflareinsights.com` (snippet Cloudflare Web Analytics di `frontend/index.html:10`, terakhir diubah di commit `1699b43`).
+- **`frontend/.env.local` sekarang ikut ter-ignore.** `.gitignore` lama hanya menutup `.env`, padahal README menyuruh developer menaruh `VITE_AVATAR_FORMAT` di `frontend/.env.local`, jadi file itu akan ikut ter-commit. Aturan diganti jadi `.env` + `.env.*` + negasi `!.env.example`.
+- **Belum terverifikasi: render model sungguhan di browser.** Butuh `live2dcubismcore.min.js` dari SDK resmi yang gated EULA, satu langkah manual yang belum dikerjakan. Yang sudah terbukti: urutan load core-sebelum-library, jalur fallback, dan pemotongan bundle.
 
-Acceptance: model render di browser, tidak ada error console, zero request 404 ke aset. → **TERPENUHI SEBAGIAN**, lihat catatan di atas.
+Acceptance: model render di browser, tidak ada error console, zero request 404 ke aset. → **TERPENUHI SEBAGIAN.** Nol request 404 ke aset sudah terbukti di kedua jalur, dan tidak ada error console dari kode Sesi B. Sisa yang belum terbukti hanya render pixel model sungguhan, karena `live2dcubismcore.min.js` belum diunduh manual.
 
 ### Sesi C - Lip-sync dari audio TTS [1 hari]
 
@@ -258,3 +262,9 @@ Empat pertanyaan ini tidak memblokir Fase A, tapi mengubah Fase B dan Fase C:
 2. **Format final?** Live2D saja, ganti total VRM, atau dua-duanya switchable di Fase C?
 3. **Siapa yang bikin model custom?** Belajar Cubism sendiri, komisi ke artist, atau sample dulu sampai produk benar-benar perlu custom?
 4. **Sudah ada file `.model3.json` dari luar?** Kalau ada, Fase B langsung hilang dan hanya perlu integrasi.
+
+## User Answer
+1. Konsep sudah ada. Bahkan sudah ada gambar PNG characternya.
+2. L2d saja untuk sekarang.
+3. Biarkan saya saja dulu, sekarang pakai model gratisan saja.
+4. belum
