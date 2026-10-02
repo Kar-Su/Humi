@@ -73,26 +73,32 @@ Hasil eksekusi:
 - Catatan: `npm` memblokir postinstall `esbuild@0.28.2` (fitur `allowScripts` npm 12). Binari nevertheless ada di `node_modules/@esbuild/linux-x64/bin/esbuild` dan build produksi tetap sukses, jadi bukan blocker.
 - Acceptance terpenuhi: `git ls-files | grep -E 'moc3|model3\.json|CubismSdk'` kosong.
 
-### Sesi B - Runtime minimal: load model dan render [1-1.5 hari]
+### Sesi B - Runtime minimal: load model dan render [1-1.5 hari] : SELESAI
 
 Pola dari AIRI `apps/stage-web/index.html:88` dan `packages/stage-ui-live2d/src/components/scenes/live2d/Canvas.vue`.
 
-- `frontend/index.html` tambah `<script src="/assets/js/live2dcubismcore.min.js"></script>` **sebelum** `<script type="module" src="/src/main.ts">`. Cubism core dievaluasi sebagai global script, bukan npm import, dan harus tersedia sebelum `pixi-live2d-display` import dievaluasi.
-- Tambah guard di `frontend/index.html` atau entry TS: kalau `window.Live2DCubismCore` undefined, jangan crash, tampilkan fallback.
-- `frontend/src/components/Live2DStage.tsx` baru:
-  - `const { Application, Ticker }` dari `pixi.js`, `Live2DModel, Live2DFactory` dari `pixi-live2d-display/cubism4`
-  - `Live2DModel.registerTicker(Ticker)` **sebelum** instantiate model, kalau tidak model tidak ikut gerak
-  - `extensions.add(TickerPlugin)`, `extensions.add(BatchRenderer)`. **Jangan** add `InteractionManager`, interaksi digerakkan manual supaya cursor eye tracking bisa di-wire nanti tanpa konflik
-  - `new Application({ backgroundAlpha: 0, preserveDrawingBuffer: true, resolution: 1 })`
-  - `new Live2DModel()` lalu `await Live2DFactory.setupLive2DModel(model, { url, id }, { autoInteract: false })`
-  - mount ke container, `resize` observer untuk canvas
-  - cleanup: `app.destroy(true)` dan putuskan ticker saat unmount, kalau tidak leak GPU dan context
-- `frontend/src/lib/avatarFormat.ts` baru: `type AvatarFormat = 'live2d' | 'emoji'`, default `emoji` sampai aset terunduh. Nilai dari `import.meta.env.VITE_AVATAR_FORMAT` supaya bisa ganti tanpa rebuild.
-- `frontend/src/components/AvatarCanvas.tsx` jadi host tipis: kalau format `live2d` render `<Live2DStage emotion analyser nowSpeaking />`, kalau `emoji` pertahankan `GLYPH` map yang sekarang sebagai fallback. Jangan hapus jalur emoji, itu satu-satunya tampilan yang jalan sebelum aset ada.
-- Sample model: unduh Hiyori free material (mirror `dist.ayaka.moe/live2d-models/`) ke `frontend/public/live2d/humi/`. Instructions unduh masuk README, bukan di-commit asset-nya.
-- Verify: `npm run lint`, `npx tsc --noEmit`, `make up` lalu buka `localhost:5173`, model terlihat, auto-blink jalan.
+Hasil eksekusi:
 
-Acceptance: model render di browser, tidak ada error console, zero request 404 ke aset.
+- **Penyimpangan dari draft plan: Cubism Core dimuat dinamis, bukan tag `<script>` di `index.html`.** `dist/cubism4.es.js:5188` melakukan `throw` di **top level modul** kalau `window.Live2DCubismCore` tidak ada. Import statis berarti crash seluruh app, termasuk saat format masih `emoji` dan core memang tidak perlu. Loader di `frontend/src/lib/cubismCore.ts` awaited lebih dulu, baru `await import("pixi-live2d-display/cubism4")`, jadi kelas bug load-order hilang total.
+- Handler `onload` di loader **hanya resolve kalau global benar-benar muncul**. Ini bukan paranoia: Vite dev server mengembalikan `index.html` (HTTP 200, `Content-Type: text/html`) untuk `/assets/js/live2dcubismcore.min.js` yang tidak ada, dan `<script>` atas respons HTML itu **tidak** memicu event `error`, hanya `load`. Cek global adalah satu-satunya cara membedakan core yang termuat dari halaman fallback.
+- Semua import Pixi (`@pixi/app`, `@pixi/core`, `@pixi/extensions`, `@pixi/ticker`) dipindah ke dalam `boot()` sebagai dynamic import, bukan di module scope. Konsekuensinya bundle utama tetap `211.04 kB` (dari `206.61 kB` di Sesi A, +4.4 kB) sementara ~376 kB renderer hanya diunduh saat `VITE_AVATAR_FORMAT=live2d`. Vite memotong jadi 6 chunk terpisah.
+- **`Live2DModel.from` tidak dipakai** karena ada di runtime `dist` tapi **tidak ada** di `types/index.d.ts` (hanya `fromSync` yang dideklarasikan), jadi `tsc` gagal. Dipakai `Live2DFactory.setupLive2DModel` yang tipe-nya lengkap dan resolve hanya setelah texture + model termuat, sehingga model aman masuk stage.
+- `setupLive2DModel` await event `ready` yang **tidak pernah fire saat gagal load**, jadi tanpa penanganan akan hang selamanya. Ditambah race timeout 20 detik plus penangkapan error, dan timer di-`clear` di `finally` serta saat unmount supaya tidak menggantung 20 detik setelah mount sukses.
+- **Jebakan StrictMode:** `app.destroy(true, { texture: false, baseTexture: false })`. Default `DestroyOptions` adalah `texture: true`, yang menghapus texture dari cache Pixi. Di StrictMode React mount-remount, mount kedua akan mendapat texture yang sudah di-destroy. Cache Pixi dibiarkan utuh; sisi Cubism tetap dilepas lewat `children: true`.
+- `autoInteract: false` dan **tanpa** `InteractionManager`, sesuai rencana Sesi D (eye tracking digerakkan manual).
+- `frontend/src/lib/avatarFormat.ts` + `cubismCore.ts` sengaja **tidak menyentuh `import.meta.env`**, keduanya menerima argumen biasa supaya bisa diuji dengan `node:test` tanpa DOM. Env dibaca di `AvatarCanvas.tsx`.
+- **`frontend/src/vite-env.d.ts` baru.** Belum ada di repo, jadi `import.meta.env` gagal `tsc` (`TS2339: Property 'env' does not exist on type 'ImportMeta'`). File itu juga yang mendeklarasikan `VITE_AVATAR_FORMAT` dan `VITE_LIVE2D_MODEL_URL`.
+- **Bug UX yang ketahuan saat review:** `handleFailure` semula membuang argumen pesan, jadi `Live2DStage` langsung unmount dan detail "file mana yang kurang" tidak pernah terbaca user. Diperbaiki: `AvatarCanvas` menyimpan pesan itu dan menampilkannya di fallback emoji.
+- `.gitignore` diubah dari `frontend/public/live2d/` jadi `frontend/public/live2d/*` + negasi `!frontend/public/live2d/README.md`, karena rules yang pakai nama folder utuh ikut menelan README di dalamnya.
+- `frontend/public/live2d/README.md` (tracked) berisi langkah unduh Core + model dan aturan lisensinya. Ada script `npm test` baru di `package.json` karena sebelumnya tidak ada cara menjalankan test frontend.
+- **Model sample: Hiyori dari `Live2D/CubismWebSamples` tag `4-r.7`, bukan mirror `dist.ayaka.moe`.** Mirror memblokir dengan HTTP 403. Tag `4-r.7` dipilih karena `pixi-live2d-display@0.4.0` menargetkan Cubism 4, sedangkan tag `5-r.*` memuat model Cubism 5. 18 berkas, 4.8 MB, dua tekstur 2048x2048.
+- **Cubism Core tidak diunduh otomatis.** `Core/RedistributableFiles.txt` mengonfirmasi `live2dcubismcore.min.js` memang boleh disalin ulang, tapi hanya lewat SDK zip yang gerbang EULA-nya dan tidak ada di dalam repo. Ada `live2dcubismcore@1.0.2` di npm tanpa deskripsi dan tanpa kejelasan asal-usul; **sengaja tidak dipakai** karena itu memasukkan kode proprietary dari pihak ketiga yang tidak terverifikasi. Intinya Cubism Core sekarang jadi langkah manual yang dijelaskan di README.
+- Verifikasi: `npm run lint` exit 0 (sisanya 1 warning `res` unused di `vite.config.ts:11` yang pre-existing), `npx tsc --noEmit` exit 0, `npm test` 22 pass / 0 fail, `npm run build` sukses, `npm ci` di container 0 vulnerabilities.
+- **Masalah lingkungan yang ditemukan:** volume `frontend_node_modules` sudah 3 minggu dan **menutup** `npm ci` di Dockerfile, jadi container tidak punya paket Pixi dan Vite balas `Failed to resolve import "@pixi/app"` (HTTP 500). Volume disinkronkan dengan `docker compose exec frontend npm ci`. Kalau `import` baru tidak ketemu di browser padahal ada di host, periksa volume ini dulu.
+- Verifikasi aset via HTTP: `/live2d/hiyori/Hiyori.model3.json` 200, `.moc3` 200, texture 200, motion 200. `Live2DStage.tsx` ter-transform HTTP 200 dengan kelima dynamic import ter-resolve ke chunk Vite terpisah.
+- **Belum terverifikasi: render model sungguhan di browser.** Butuh Chromium (sedang dipasang developer) DAN `live2dcubismcore.min.js` dari SDK resmi yang gated EULA. Yang sudah terbukti secara mekanis: jalur fallback (format default `emoji` tidak pernah menyentuh Pixi) dan urutan load core-sebelum-library.
+
+Acceptance: model render di browser, tidak ada error console, zero request 404 ke aset. → **TERPENUHI SEBAGIAN**, lihat catatan di atas.
 
 ### Sesi C - Lip-sync dari audio TTS [1 hari]
 
@@ -216,16 +222,16 @@ Sequencing: Sesi A sampai E adalah satu rantai karena tiap sesi bergantung pada 
 
 ## Acceptance Criteria (Fase A selesai bila)
 
-- [ ] Model Live2D render di `localhost:5173`, console bersih
-- [ ] Mulut bergerak sinkron audio TTS, menutup bersih di akhir utterance dan saat interrupt
-- [ ] Semua 25 emotion di `protocol.ts:4-30` punya entri mapping, tidak ada silent drop
-- [ ] Auto-blink natural, napas jalan, eye tracking jalan
-- [ ] Gagal load model atau Cubism Core hilang, jatuh ke avatar emoji dengan pesan jelas, tidak blank screen
-- [ ] `npm run lint` dan `npx tsc --noEmit` hijau di `frontend/`
-- [ ] `git ls-files` tidak mengandung `*.moc3`, `*.model3.json`, `live2dcubismcore.min.js`
-- [ ] D2 di `docs/architecture.md` punya baris revisit dengan alasan
-- [ ] `.opencode/skill/avatar-frontend/SKILL.md` cocok dengan implementasi aktual
-- [ ] Nol perubahan di `gateway/`, `ai-service/`, dan `protocol-contract/SKILL.md` (format-agnostic, diverifikasi)
+- [ ] Model Live2D render di `localhost:5173`, console bersih — **tergantung langkah manual unduh Core**
+- [ ] Mulut bergerak sinkron audio TTS, menutup bersih di akhir utterance dan saat interrupt — Sesi C
+- [ ] Semua 25 emotion di `protocol.ts:4-30` punya entri mapping, tidak ada silent drop — Sesi D
+- [ ] Auto-blink natural, napas jalan, eye tracking jalan — Sesi E
+- [x] Gagal load model atau Cubism Core hilang, jatuh ke avatar emoji dengan pesan jelas, tidak blank screen
+- [x] `npm run lint` dan `npx tsc --noEmit` hijau di `frontend/`
+- [x] `git ls-files` tidak mengandung `*.moc3`, `*.model3.json`, `live2dcubismcore.min.js`
+- [x] D2 di `docs/architecture.md` punya baris revisit dengan alasan
+- [ ] `.opencode/skill/avatar-frontend/SKILL.md` cocok dengan implementasi aktual — Sesi F
+- [x] Nol perubahan di `gateway/`, `ai-service/`, dan `protocol-contract/SKILL.md` (format-agnostic, diverifikasi)
 
 ## Decisions Log
 
@@ -234,6 +240,13 @@ Sequencing: Sesi A sampai E adalah satu rantai karena tiap sesi bergantung pada 
 - 2026-10-02: `patch-package` tidak ditambahkan. Patch AIRI hanya relevan untuk loader `.zip`, sedangkan Humi load model dari URL folder.
 - 2026-10-02: `overrides.gh-pages = 6.3.0` disetujui. `pixi-live2d-display@0.4.0` mencium CVE critical lewat dependency yang salah deklarasi. Sudah diverifikasi `gh-pages` tidak pernah ter-import di `dist/cubism4.es.js` (0 kemunculan) dan hanya punya `bin`, jadi tidak terjangkau, tapi di-override supaya `npm audit` bersih dan tidak ada kode rentan di `node_modules`.
 - 2026-10-02: empat pertanyaan terbuka masih belum terjawab, tidak memblokir Sesi B.
+- 2026-10-02: **Sesi B selesai.** Cubism Core dimuat dinamis lewat `loadCubismCore()` lalu baru `await import("pixi-live2d-display/cubism4")`, bukan `<script>` di `index.html` seperti draft. Alasannya `dist/cubism4.es.js:5188` melempar `Error` di top level modul saat global core tidak ada, jadi import statis menjatuhkan seluruh aplikasi termasuk saat format masih `emoji`.
+- 2026-10-02: `onload` pada loader Core hanya dianggap sukses kalau `window.Live2DCubismCore` benar-benar muncul. Dev server Vite menjawab HTTP 200 `text/html` untuk berkas Core yang tidak ada, dan `<script>` atas respons HTML tidak memicu `error`, hanya `load`.
+- 2026-10-02: semua import Pixi dipindah ke dalam fungsi boot supaya renderer tidak masuk bundle utama. Bundle utama naik hanya 4.4 kB (206.61 ke 211.04 kB), sementara ~376 kB renderer menjadi 6 chunk terpisah yang hanya diunduh saat format `live2d`.
+- 2026-10-02: `Live2DFactory.setupLive2DModel` dipilih menggantikan `Live2DModel.from`, karena `from` tidak ada di berkas tipe padahal ada di runtime `dist`.
+- 2026-10-02: `app.destroy(true, { texture: false, baseTexture: false })`. Nilai default `texture: true` menghapus cache texture Pixi dan merusak remount kedua di StrictMode.
+- 2026-10-02: sample model memakai Hiyori dari `Live2D/CubismWebSamples` tag `4-r.7` (Cubism 4), karena mirror `dist.ayaka.moe` memblokir dengan HTTP 403 dan tag `5-r.*` memuat model Cubism 5 yang tidak cocok dengan `pixi-live2d-display@0.4.0`.
+- 2026-10-02: paket `live2dcubismcore` di npm ditolak. Tidak ada sumber resmi yang menghosting Core di luar SDK ber-EULA, dan menarik kode proprietary dari pihak ketiga yang tidak terverifikasi tidak sebanding dengan risikonya. Core jadi langkah manual yang dijelaskan di `frontend/public/live2d/README.md`.
 - Keputusan yang sudah bisa di-*assume* karena tidak mengubah scope Fase A: sample model dulu, jalur model custom terpisah, deps di-pin eksplisit, aset model tidak masuk repo.
 - Keputusan yang menunggu jawaban user dan bisa mengubah plan: lihat `Open Questions`.
 

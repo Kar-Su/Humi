@@ -35,7 +35,9 @@ hf-cache/
 *.exp3.json
 *.cdi3.json
 *.physics3.json
-frontend/public/live2d/
+frontend/public/live2d/*
+# Petunjuk unduh tetap dilacak supaya mesin baru bisa menyiapkan avatar.
+!frontend/public/live2d/README.md
 frontend/public/assets/js/
 
 # Build artefak

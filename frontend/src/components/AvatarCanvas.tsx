@@ -1,4 +1,7 @@
+import { useCallback, useState } from "react";
+import { resolveAvatarFormat, resolveLive2dModelUrl } from "../lib/avatarFormat";
 import type { Emotion } from "../lib/protocol";
+import { Live2DStage } from "./Live2DStage";
 
 const GLYPH: Record<Emotion, string> = {
   netral: "😐",
@@ -28,18 +31,37 @@ const GLYPH: Record<Emotion, string> = {
   sarcastic: "😏",
 };
 
+const AVATAR_FORMAT = resolveAvatarFormat(import.meta.env);
+const LIVE2D_MODEL_URL = resolveLive2dModelUrl(import.meta.env);
+
 export function AvatarCanvas({
   emotion,
-  analyser: _analyser,
+  analyser,
 }: {
   emotion: Emotion;
   analyser: AnalyserNode | null;
 }) {
-  void _analyser;
+  // Amplitude drives the mouth once lip sync lands; the node is plumbed all the way
+  // here already, so nothing above needs to change when that happens.
+  void analyser;
+
+  const [live2dError, setLive2dError] = useState<string | null>(null);
+  const handleFailure = useCallback((message: string) => setLive2dError(message), []);
+
+  if (AVATAR_FORMAT === "live2d" && live2dError === null) {
+    return <Live2DStage modelUrl={LIVE2D_MODEL_URL} onFailure={handleFailure} />;
+  }
+
   return (
-    <div className="flex h-32 w-full items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/60 text-5xl">
-      <span title={emotion}>{GLYPH[emotion] ?? "😐"}</span>
-      <span className="ml-3 text-sm text-neutral-500">avatar offline - chat & suara jalan</span>
+    <div className="flex h-32 w-full items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/60">
+      <span className="text-5xl" title={emotion}>
+        {GLYPH[emotion] ?? "😐"}
+      </span>
+      <p className="ml-3 max-w-xs text-xs text-neutral-500">
+        {live2dError
+          ? `avatar Live2D gagal dimuat, chat & suara tetap jalan. ${live2dError}`
+          : "avatar offline, chat & suara tetap jalan"}
+      </p>
     </div>
   );
 }
