@@ -8,6 +8,7 @@ dist/
 
 # Lingkungan & rahasia
 .env
+!.plan
 
 # Berkas model & aset berat
 *.vrm
@@ -21,8 +22,21 @@ dist/
 *.bin
 !gateway/**/fixtures/*.bin
 hf-cache/
-ollama/
-base_models/
+!ollama/
+!base_models/
+
+# Aset Live2D
+# Cubism Core for Web dan sample model punya lisensi terpisah dari repo ini,
+# jadi hanya boleh ada di mesin lokal dan tidak boleh ikut build publik.
+*.moc3
+*.moc
+*.model3.json
+*.motion3.json
+*.exp3.json
+*.cdi3.json
+*.physics3.json
+frontend/public/live2d/
+frontend/public/assets/js/
 
 # Build artefak
 gateway/gateway

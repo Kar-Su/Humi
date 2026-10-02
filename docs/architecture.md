@@ -7,7 +7,7 @@
 
 Fenomena sosial: menurunnya frekuensi komunikasi tatap muka membuat keterampilan
 berbicara menurun — gagap, salah ucap, sulit merangkai kalimat spontan.
-Solusi yang dipilih: **Humi — Soul AI Waifu** ber-avatar 3D yang berbahasa Indonesia,
+Solusi yang dipilih: **Humi — Soul AI Waifu** ber-avatar Live2D yang berbahasa Indonesia,
 dengan kepribadian energik-playful terinspirasi Hu Tao × Neuro-sama — tempat berlatih
 ngobrol tanpa rasa dinilai. Referensi inspirasi: Neuro-sama, Project AIRI, pixiv/ChatVRM.
 
@@ -16,7 +16,7 @@ ngobrol tanpa rasa dinilai. Referensi inspirasi: Neuro-sama, Project AIRI, pixiv
 | # | Keputusan | Alternatif yang ditolak | Justifikasi |
 |---|---|---|---|
 | D1 | Platform: web browser | mobile native, desktop native | Render VRM ringan di WebGL/WebGPU; iterasi cepat; bisa dibungkus Tauri/Capacitor nanti tanpa rombak |
-| D2 | Avatar: VRM + three-vrm | Live2D, Unity render | Standar terbuka ekosistem VTuber; pipeline React+R3F matang; satu karakter = beban kecil bagi device user |
+| D2 | Avatar: VRM + three-vrm — **direvisit D12** | Live2D, Unity render | Standar terbuka ekosistem VTuber; pipeline React+R3F matang; satu karakter = beban kecil bagi device user |
 | D3 | AI: self-hosted zero-cost di laptop dev | cloud API | Unlimited & gratis selama pengembangan; RTX 4060 8GB + i7-14700HX cukup untuk LLM Q4 7-8B |
 | D4 | Pembagian komputasi: LLM di GPU, STT/TTS di CPU | semua di GPU | Laptop throttling saat sesi panjang; CPU 20 core sanggup whisper-small int8 & VITS real-time |
 | D5 | Topologi: frontend → gateway Go → ai-service Python → ollama | monolith Python | Gateway jadi pintu tunggal (auth/sesi nanti); bahasa sesuai kekuatan masing-masing; topologi dev = topologi produksi |
@@ -26,13 +26,14 @@ ngobrol tanpa rasa dinilai. Referensi inspirasi: Neuro-sama, Project AIRI, pixiv
 | D9 | Docker compose penuh + network internal `humi-net` | proses native di host | Reproducible; isolasi; hanya frontend/gateway/ollama(loopback) terekspos |
 | D10 | Identitas produk: **Soul AI Waifu** (keputusan 2026-08-25) | "AI companion" generik | Positioning tajam ala VTuber culture; persona Hu Tao × Neuro-sama memberi karakter jelas & konsisten; selaras dengan konsep Soul System (Fase 2) |
 | D11 | Interim bilingual: suara English via sovits-zeta (2026-08-26) | menunggu TTS ID lolos sebelum lanjut | Kelima jalur TTS ID open-source gagal gerbang (HASIL.md); Zeta lolos telinga untuk EN; pipeline tidak diblokir riset suara — Round 3 di-backlog |
+| D12 | Avatar: Live2D Cubism via PixiJS (revisit D2, 2026-10-02) | VRM/three-vrm (tetap terpasang sebagai opsi Fase C), Unity render | Target produk adalah waifu bergaya ilustrasi 2D, bukan humanoid 3D; Live2D memberi ekspresi wajah 2D yang lebih hidup dan bobot render lebih ringan di laptop dev; protocol tidak perlu berubah karena `emotion` + `analyser` format-agnostic; Dep VRM dibiarkan terpasang agar jalur balik ke VRM tetap terbuka tanpa rewrite |
 
 ## 3. Diagram
 
 ```
 [Browser :5173]
  ├─ UI chat + mic capture          ─┐ WebSocket /ws
- └─ Avatar VRM (three-vrm)          │
+ └─ Avatar Live2D (PixiJS)          │
                                     ▼
                      [gateway (Go) :8080]
                      WS hub · relay · (nanti auth/sesi)
