@@ -9,6 +9,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "node --test src/lib/*.test.ts",
+    "tokens": "node ../.opencode/skill/design-system/scripts/generate-tokens.cjs --config ../design-system/humi/tokens.json -o src/styles/tokens.css",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -1,1 +1,72 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
+
+/*
+ * Maps Humi semantic tokens onto short Tailwind theme names, so components read
+ * `bg-panel` instead of `bg-[var(--color-surface)]`.
+ *
+ * `inline` matters: it keeps the var() reference in the generated utility instead of
+ * resolving it at build time, which is what lets Tailwind opacity modifiers
+ * (`bg-panel/60`) still read through to the token layer.
+ */
+@theme inline {
+  /* surfaces */
+  --color-canvas: var(--color-bg);
+  --color-panel: var(--color-surface);
+  --color-raised: var(--color-surface-raised);
+  --color-line: var(--color-border);
+  --color-edge: var(--color-border-control);
+
+  /* text */
+  --color-ink: var(--color-fg);
+  --color-ink-muted: var(--color-fg-muted);
+  --color-ink-subtle: var(--color-fg-subtle);
+
+  /* brand, warm side: ember as primary action */
+  --color-brand: var(--color-ember);
+  --color-brand-hover: var(--color-ember-hover);
+  --color-brand-active: var(--color-ember-active);
+  --color-brand-ink: var(--color-on-ember);
+  --color-bubble: var(--color-bubble-user);
+
+  /* accents */
+  --color-gold: var(--color-gold);
+  --color-gold-ink: var(--color-on-gold);
+  --color-live: var(--color-live);
+  --color-live-ink: var(--color-on-live);
+  --color-emotion: var(--color-magenta);
+  --color-emotion-ink: var(--color-on-magenta);
+
+  /* status */
+  --color-ok: var(--color-success);
+  --color-bad: var(--color-danger);
+  --color-warn: var(--color-warning);
+
+  /* typography */
+  --font-display: var(--primitive-fontFamily-display);
+  --font-body: var(--primitive-fontFamily-body);
+  --font-mono: var(--primitive-fontFamily-mono);
+
+  /* radii */
+  --radius-sm: var(--primitive-radius-sm);
+  --radius-md: var(--primitive-radius-md);
+  --radius-lg: var(--primitive-radius-lg);
+
+  /* motion */
+  --ease-standard: var(--primitive-easing-standard);
+}
+
+/*
+ * Motion is a preference, not a setting. The avatar keeps breathing and lip syncing under
+ * this query because that is information rather than decoration.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

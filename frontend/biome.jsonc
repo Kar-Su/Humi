@@ -1,0 +1,49 @@
+{
+  "files": {
+    "includes": [
+      "src/**/*",
+      "!src/styles/tokens.css",
+      "biome.jsonc",
+      "package.json",
+      "vite.config.ts",
+      "tsconfig.json",
+      "index.html"
+    ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
+  },
+  "overrides": [
+    {
+      // The prefers-reduced-motion block has to outrank every component animation
+      // regardless of specificity, so !important is the mechanism there, not a shortcut.
+      "includes": ["src/index.css"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          }
+        }
+      }
+    }
+  ]
+}

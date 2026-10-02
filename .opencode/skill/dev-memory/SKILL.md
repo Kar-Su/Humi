@@ -28,34 +28,34 @@ tandai entri yang masih teori dengan `[belum diverifikasi]`.
 
 Status per 2026-10-02. Semua di sini sudah dicek langsung, bukan asumsi.
 
-1. **Stack sedang jalan dalam mode prod, jadi `localhost:5173` dan `:8080` mati.**
-   `docker-compose.prod.yml` punya `ports: !reset []` untuk `frontend` dan `gateway`, sehingga
-   keduanya tidak publish ke host. `curl` ke keduanya balas `000`. Yang hidup hanya
-   `https://humi.karlearn.site` lewat traefik dan cloudflared. **Ini memblokir semua verifikasi
-   browser dan screenshot.** Perbaikan: `make down-prod && make up`.
-
-2. **MCP tool `playwright` rusak.** Channel `chrome` mengarah ke `/opt/google/chrome/chrome`
+1. **MCP tool `playwright` rusak.** Channel `chrome` mengarah ke `/opt/google/chrome/chrome`
    yang tidak ada. Binary yang bisa dipakai ada di
    `~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome`.
    Workaround: pakai `playwright-core` dari `~/.npm/_npx/*/node_modules/playwright-core/index.js`
    (CommonJS, default import) dengan argumen
    `--no-sandbox --use-gl=swiftshader --enable-unsafe-swiftshader`.
 
-3. **Volume `frontend_node_modules` menutup `/app/node_modules`, jadi `npm install` di
+2. **Volume `frontend_node_modules` menutup `/app/node_modules`, jadi `npm install` di
    Dockerfile tidak berarti apa-apa.** Setelah dependency frontend berubah, selalu jalankan
    `docker compose exec frontend npm ci`. Gejala klasik: host punya paketnya, tapi Vite di
    container balas `Failed to resolve import "@pixi/app"` dengan HTTP 500. Sudah terverifikasi
    per 2026-10-02 bahwa container punya `@pixi/*` dan `pixi-live2d-display`.
 
-4. **`.opencode/.gitignore` mengabaikan dirinya sendiri, jadi tidak pernah ter-track.**
+3. **`.opencode/.gitignore` mengabaikan dirinya sendiri, jadi tidak pernah ter-track.**
    Setiap aturan gitignore baru harus masuk ke `.gitignore` di root repo.
 
-5. **`uipro init` tidak punya flag `--dry-run`.** Opsi yang ada hanya
+4. **`uipro init` tidak punya flag `--dry-run`.** Opsi yang ada hanya
    `-a/--ai`, `-f/--force`, `-o/--offline`, `-g/--global`, `-t/--token`.
    Workaround: jalankan di direktori scratch, lalu salin yang diperlukan.
 
-6. **Tailwind v4 tanpa `tailwind.config.js`.** Token harus lewat blok `@theme` di
-   `frontend/src/index.css`, bukan lewat file konfigurasi.
+5. **Tailwind v4 tanpa `tailwind.config.js`.** Token lewat blok `@theme inline` di
+   `frontend/src/index.css`, bukan lewat file konfigurasi. `inline` wajib, kalau tidak modifier
+   opasitas seperti `bg-panel/60` berhenti membaca lewat lapisan token.
+
+6. **Berkas hasil generate harus dikecualikan dari formatter Biome.** `frontend/biome.jsonc` memuat
+   `"!src/styles/tokens.css"` di `files.includes`. Tanpa itu, `biome format --write` menormalkan
+   huruf besar hex dan test kesegaran CSS langsung gagal. Konfiguranya harus bernama
+   `biome.jsonc`, bukan `biome.json`, karena `overrides` di situ perlu komentar penjelas.
 
 7. **`uipro` menulis ke `.opencode/skills/` (jamak) dan mereujuk `.claude/skills/` di dalam
    dokumen.** Repo ini memakai `.opencode/skill/` (tunggal). Setelah `uipro init`, pindahkan foldernya lalu
@@ -68,6 +68,23 @@ Status per 2026-10-02. Semua di sini sudah dicek langsung, bukan asumsi.
    dan sebagian menarik ke API Gemini berbayar. Buang setiap kali install atau update. Skill yang
    dipakai hanya `ui-ux-pro-max`, `design-system`, dan `ui-styling`. Perintah prune-nya ada di
    `issues.md` bagian ENV-005.
+
+9. **`make down-prod` sama saja dengan `make down`.** Keduanya memakai project compose yang sama
+   (`name: humi`), jadi `down-prod` mematikan seluruh stack, bukan cuma mode prod. Untuk balik
+   ke verifikasi lokal harus `make up` lagi. Detailnya di `issues.md` bagian ENV-006.
+
+## Gerbang design token
+
+Sumber kebenaran token adalah `design-system/humi/tokens.json`. Setelah mengubahnya:
+
+```bash
+npm --prefix frontend run tokens   # regenerate frontend/src/styles/tokens.css
+npm --prefix frontend test         # kontras + kesegaran CSS hasil generate
+```
+
+`validate-tokens.cjs` dari skill `design-system` **tidak dipakai sebagai gerbang**. Script itu
+hanya menangkap hex mentah, sementara komponen Humi menulis kelas utilitas Tailwind, dan status
+keluarannya selalu 0. Alasannya ada di `issues.md` bagian TOOL-002.
 
 ## Jebakan Live2D yang sudah diperbaiki, jangan diulang
 
