@@ -10,20 +10,27 @@ Dua hal, keduanya wajib, tidak boleh committed:
 
 ### 1. Cubism Core for Web
 
-Runtime proprietary dari Live2D. Unduh **Cubism SDK for Web** dari
-<https://www.live2d.com/en/sdk/download/web/>, lalu salin satu berkas:
+Runtime proprietary dari Live2D. Berkasnya sudah tersedia di domain resmi
+Live2D, jadi cukup diunduh langsung:
 
-```
-Core/live2dcubismcore.min.js  ->  frontend/public/assets/js/live2dcubismcore.min.js
+```bash
+mkdir -p frontend/public/assets/js
+curl -o frontend/public/assets/js/live2dcubismcore.min.js \
+  https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js
 ```
 
-Paket ini menyediakan global `window.Live2DCubismCore`. Humi memuatnya lewat
+Alternatifnya, unduh **Cubism SDK for Web** dari
+<https://www.live2d.com/en/sdk/download/web/>, lalu salin
+`Core/live2dcubismcore.min.js` ke lokasi yang sama.
+
+Berkas ini menyediakan global `window.Live2DCubismCore`. Humi memuatnya lewat
 `frontend/src/lib/cubismCore.ts`, bukan tag `<script>` di `index.html`.
 
 Berkasnya dipublikasikan ulang di bawah
 [Live2D Proprietary Software License](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html),
 jadi boleh disalin, tapi tetap proprietary. Jangan asal ambil salinan dari
-npm atau gist orang lain.
+npm atau gist orang lain. Core yang diunduh dari URL di atas melaporkan versi
+5.1.0 dan sudah teruji jalan bersama `pixi-live2d-display@0.4.0`.
 
 ### 2. Model
 

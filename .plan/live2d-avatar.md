@@ -100,9 +100,23 @@ Hasil eksekusi:
 - **Verifikasi browser — jalur `live2d` dengan Core absen:** 404 `/assets/js/live2dcubismcore.min.js`, loader menolak, avatar jatuh ke emoji dengan pesan yang menyebut path persis, tanpa blank screen, dan Pixi **tidak pernah** ter-import karena kegagalan terjadi sebelum dynamic import.
 - Nol 404 yang tersisa di console sudah diverifikasi pre-existing, bukan dari Sesi B: `favicon.ico` (permintaan default browser, `index.html` memang tidak punya `<link rel=icon>`) dan beacon `cloudflareinsights.com` (snippet Cloudflare Web Analytics di `frontend/index.html:10`, terakhir diubah di commit `1699b43`).
 - **`frontend/.env.local` sekarang ikut ter-ignore.** `.gitignore` lama hanya menutup `.env`, padahal README menyuruh developer menaruh `VITE_AVATAR_FORMAT` di `frontend/.env.local`, jadi file itu akan ikut ter-commit. Aturan diganti jadi `.env` + `.env.*` + negasi `!.env.example`.
-- **Belum terverifikasi: render model sungguhan di browser.** Butuh `live2dcubismcore.min.js` dari SDK resmi yang gated EULA, satu langkah manual yang belum dikerjakan. Yang sudah terbukti: urutan load core-sebelum-library, jalur fallback, dan pemotongan bundle.
+- **Render model sungguhan sudah terverifikasi** (lihat blok "Perbaikan render" di bawah). Jalur `live2d` dengan Core terpasang menampilkan karakter Hiyori di panel, 17 request aset semuanya 200.
 
-Acceptance: model render di browser, tidak ada error console, zero request 404 ke aset. → **TERPENUHI SEBAGIAN.** Nol request 404 ke aset sudah terbukti di kedua jalur, dan tidak ada error console dari kode Sesi B. Sisa yang belum terbukti hanya render pixel model sungguhan, karena `live2dcubismcore.min.js` belum diunduh manual.
+Acceptance: model render di browser, tidak ada error console, zero request 404 ke aset. → **TERPENUHI.**
+
+#### Perbaikan render: tiga bug yang menutupi satu sama lain
+
+Core diambil dari `https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js` (domain resmi first-party, HTTP 200, 207 KB, melaporkan Core 5.1.0). Setelah Core ada, model tetap tidak tampil. Tiga bug bertumpuk, dan dua yang pertama menutupi diagnosis yang ketiga:
+
+1. **`autoUpdate` tidak pernah menggambar apa pun.** Bawaan `Live2DModel` mengikat model ke `Ticker.shared` (`dist/cubism4.es.js:4858`), dan tidak ada apa pun di aplikasi ini yang menyalakan ticker itu. GejalanyaUTHOR: model load, `CubismFramework.startUp()` selesai, `_render` dipanggil 566 kali, nol error, nol piksel. Diperbaiki dengan `autoUpdate: false` lalu `model.update(pixi.ticker.deltaMS)` di dalam loop render, jadi update dan render berbagi satu clock.
+2. **Model 2976x4175 beranchor di origin, panel cuma 622x126.** Hampir 99.97% model digambar di luar kanvas. Terlihat sebagai stage kosong yang bersih, tanpa error. Diperbaiki dengan `resizeTo: host` plus skala fit dan center.
+3. **`model.width` sudah memasukkan `model.scale`.** Versi pertama `fit()` membaca `model.width` di dalam callback, jadi tiap panggilan `ResizeObserver` mengalikan scale lagi. Avatar meledak jadi satu bidang datar memenuhi panel: PNG 106 KB dengan isi cream seragam dan rentang luminansi hanya 144 sampai 240. Diperbaiki dengan menangkap ukuran authored satu kali saat scale masih 1.
+
+Kesalahan baca yang sudah aku buat sendiri: dua pixel-readback langsung (canvas `toDataURL` dan `gl.readPixels`) melaporkan nol piksel opaque padahal frame sudah benar-benar tergambar, sehingga diagnosis "belum render" terlalu cepat. Bukti yang benar datang dari men-decode PNG hasil `canvas.toDataURL()` lalu membaca kanal alpha-nya.
+
+Akar masalah ketiganya sekarang punya unit test di `frontend/src/lib/fitModel.test.ts`, termasuk kasus "dipanggil sepuluh kali menghasilkan scale yang sama" supaya regresi yang sama tidak bisa kembali diam-diam.
+
+Verifikasi akhir: `npm test` 31 pass / 0 fail, `npx tsc --noEmit` exit 0, `npm run lint` exit 0 (1 warning pre-existing), `npm run build` sukses dengan bundle utama 211.66 kB dan keenam chunk Pixi tetap lazy. Jalur `emoji` default masih nol request ke renderer.
 
 ### Sesi C - Lip-sync dari audio TTS [1 hari]
 
@@ -226,7 +240,7 @@ Sequencing: Sesi A sampai E adalah satu rantai karena tiap sesi bergantung pada 
 
 ## Acceptance Criteria (Fase A selesai bila)
 
-- [ ] Model Live2D render di `localhost:5173`, console bersih — **tergantung langkah manual unduh Core**
+- [x] Model Live2D render di `localhost:5173`, console bersih — terbukti dengan Cubism Core 5.1.0 dan model Hiyori, 17 request aset 200
 - [ ] Mulut bergerak sinkron audio TTS, menutup bersih di akhir utterance dan saat interrupt — Sesi C
 - [ ] Semua 25 emotion di `protocol.ts:4-30` punya entri mapping, tidak ada silent drop — Sesi D
 - [ ] Auto-blink natural, napas jalan, eye tracking jalan — Sesi E
@@ -251,6 +265,10 @@ Sequencing: Sesi A sampai E adalah satu rantai karena tiap sesi bergantung pada 
 - 2026-10-02: `app.destroy(true, { texture: false, baseTexture: false })`. Nilai default `texture: true` menghapus cache texture Pixi dan merusak remount kedua di StrictMode.
 - 2026-10-02: sample model memakai Hiyori dari `Live2D/CubismWebSamples` tag `4-r.7` (Cubism 4), karena mirror `dist.ayaka.moe` memblokir dengan HTTP 403 dan tag `5-r.*` memuat model Cubism 5 yang tidak cocok dengan `pixi-live2d-display@0.4.0`.
 - 2026-10-02: paket `live2dcubismcore` di npm ditolak. Tidak ada sumber resmi yang menghosting Core di luar SDK ber-EULA, dan menarik kode proprietary dari pihak ketiga yang tidak terverifikasi tidak sebanding dengan risikonya. Core jadi langkah manual yang dijelaskan di `frontend/public/live2d/README.md`.
+- 2026-10-02: Core diambil dari `https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js`, domain resmi first-party yang tersedia di dokumentasi SDK, menggantikan langkah unduh manual dari ZIP EULA. Berkas 207 KB dan melaporkan Core 5.1.0; `pixi-live2d-display@0.4.0` tetap kompatibel karena ia memanggil API bentuk namespace (`Live2DCubismCore.Version.csmGetVersion`), bukan bentuk `csm*` datar. Dugaan awal bahwa Core ini tidak kompatibel karena bentrok versi ternyata salah, sebab kita salah membaca bentuk API-nya.
+- 2026-10-02: `autoUpdate: false` dan update dipompa dari ticker aplikasi. Bawaan library mengikat model ke `Ticker.shared`, yang tidak pernah di-start di aplikasi ini, sehingga model load tapi tidak pernah menggambar.
+- 2026-10-02: ukuran authored model ditangkap satu kali saat scale masih 1, lalu dipakai ulang oleh `fit()`. `model.width` yang dilaporkan model hidup sudah memasukkan `model.scale`, sehingga membacanya di dalam callback akan mengalikan scale berulang.
+- 2026-10-02: matematika fit diekstrak ke `frontend/src/lib/fitModel.ts` dengan unit test, sesuai aturan repo bahwa logika murni wajib diuji. Termasuk kasus idempotensi yang mengunci bug scale-berlipat.
 - Keputusan yang sudah bisa di-*assume* karena tidak mengubah scope Fase A: sample model dulu, jalur model custom terpisah, deps di-pin eksplisit, aset model tidak masuk repo.
 - Keputusan yang menunggu jawaban user dan bisa mengubah plan: lihat `Open Questions`.
 
