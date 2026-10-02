@@ -122,12 +122,25 @@ make piper             # re-test Piper + skor otomatis -> out/piper_skor.csv
 make bench-tts ENGINE=mms|piper|all
 ```
 
+## Memory Kerja
+
+Katalog issue, blocker, dan jebakan lingkungan yang sudah pernah ditemukan beserta solusinya:
+
+- `.opencode/skill/dev-memory/SKILL.md` — ringkasan blocker yang masih aktif.
+- `.opencode/skill/dev-memory/issues.md` — katalog lengkap per entri.
+
+**Agent WAJIB memuat skill `dev-memory` sebelum**: debug error yang belum pernah muncul,
+menyimpulkan penyebab dari asumsi, menjalankan browser/Playwright/screenshot, atau menyentuh
+docker compose. Sumber memory ini agar sesi baru atau model lain tidak mengulang kesalahan yang
+sama. Temuan baru wajib ditambahkan kembali ke `issues.md`.
+
 ## Peta Dokumentasi
 
 - `docs/architecture.md` — keputusan arsitektur & justifikasinya (hasil brainstorming).
 - `docs/roadmap.md` — Fase 0–3 beserta gerbang keputusan.
-- Skills (dimuat otomatis saat relevan): `dev-workflow`, `protocol-contract`,
-  `benchmark-id`, `model-ops`, `persona-prompting`, `avatar-frontend`.
+- Skills (dimuat otomatis saat relevan): `dev-memory`, `dev-workflow`, `protocol-contract`,
+  `benchmark-id`, `model-ops`, `persona-prompting`, `avatar-frontend`, `ui-ux-pro-max`,
+  `design-system`, `ui-styling`.
 - Commands opencode: `/up` (nyalakan stack), `/status` (kesehatan+GPU),
   `/bench` (benchmark Indonesia), `/deslop` (bersihkan slop AI).
 - Referensi eksternal via `@` di opencode: `airi`, `webai`, `chatvrm`.
