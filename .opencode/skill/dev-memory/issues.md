@@ -94,7 +94,7 @@ menunjuk folder yang tidak pernah ada di repo ini.
 `"skillPath": "skills/ui-ux-pro-max"`, dan beberapa sub-skill berasal dari paket Claude Code yang
 mengarang path `.claude/skills/`.
 
-**Solusi.** Setelah install, rapikan dua hal:
+**Solusi.** Setelah install, rapikan tiga hal: pindahkan path, perbaiki rujukan, buang yang tidak relevan.
 
 ```bash
 cd .opencode && for d in skills/*/; do mv "$d" "skill/$(basename "$d")"; done && rmdir skills
@@ -104,6 +104,24 @@ rg -l '\.claude/skills' skill/ | xargs sed -i \
 
 OpenCode membaca kedua konvensi, tapi konvensi repo harus dijaga agar tidak ada dua folder skill
 dengan isi berbeda.
+
+**Yang dibuang dan alasannya.** Installer ikut membawa `banner-design`, `slides`, `brand`, dan
+`design`. Keempatnya dibuang karena isinya soal artefak pemasaran, bukan antarmuka obrolan:
+logo dan corporate identity program, brand guideline, slide presentasi, dan banner sosial. Tiga di
+antaranya juga menarik ke API Gemini berbayar yang tidak dipakai Humi. Yang dipertahankan hanya
+`ui-ux-pro-max`, `design-system`, dan `ui-styling`.
+
+Pemeriksaan sebelum membuang sudah dilakukan: ketiga skill yang dipertahankan tidak punya rujukan
+path ke keempat skill yang dibuang, dan `design-system` sudah self-contained karena script dan
+data slide-nya sendiri ada di `design-system/scripts` dan `design-system/data`, bukan di folder
+`slides`.
+
+```bash
+rg -n 'opencode/skill/(banner-design|slides|brand|design)/' design-system ui-styling ui-ux-pro-max
+```
+
+**Penting.** `uipro update` akan memasang ulang keempatnya. Ulangi langkah prune setiap kali
+update, lalu cek lagi tidak ada rujukan silang yang putus.
 
 ---
 

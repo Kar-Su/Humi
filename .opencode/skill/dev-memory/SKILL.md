@@ -63,6 +63,12 @@ Status per 2026-10-02. Semua di sini sudah dicek langsung, bukan asumsi.
    OpenCode membaca kedua konvensi, tapi konvensi repo harus dijaga agar tidak ada dua folder
    skill dengan isi berbeda.
 
+8. **`uipro` juga membawa empat skill yang tidak dipakai Humi, yaitu `banner-design`, `slides`,
+   `brand`, dan `design`.** Semuanya soal logo, brand guideline, presentasi, dan banner sosial,
+   dan sebagian menarik ke API Gemini berbayar. Buang setiap kali install atau update. Skill yang
+   dipakai hanya `ui-ux-pro-max`, `design-system`, dan `ui-styling`. Perintah prune-nya ada di
+   `issues.md` bagian ENV-005.
+
 ## Jebakan Live2D yang sudah diperbaiki, jangan diulang
 
 Ringkasan. Penjelasan lengkap ada di `issues.md`.
