@@ -1,9 +1,13 @@
 import type { Application } from "@pixi/app";
 import { useEffect, useRef, useState } from "react";
 import { loadCubismCore } from "../lib/cubismCore";
+import { fitModelToPanel } from "../lib/fitModel";
 
 /** A model that neither resolves nor rejects would otherwise hang the avatar forever. */
 const LOAD_TIMEOUT_MS = 20_000;
+
+/** Breathing room around the model so it never touches the panel edges. */
+const FIT_PADDING = 0.94;
 
 export interface Live2DStageProps {
   modelUrl: string;
@@ -26,6 +30,7 @@ export function Live2DStage({ modelUrl, onFailure }: Live2DStageProps) {
     let disposed = false;
     let app: Application | null = null;
     let loadTimer: ReturnType<typeof setTimeout> | undefined;
+    let observer: ResizeObserver | undefined;
 
     const fail = (message: string) => {
       if (disposed) return;
@@ -63,22 +68,16 @@ export function Live2DStage({ modelUrl, onFailure }: Live2DStageProps) {
         backgroundAlpha: 0,
         preserveDrawingBuffer: true,
         autoDensity: true,
+        resizeTo: host,
         resolution: Math.min(globalThis.devicePixelRatio || 1, 2),
       });
 
       const pixi = app;
-      pixi.ticker.remove(pixi.render, pixi);
-      pixi.ticker.add(() => {
-        try {
-          pixi.render();
-        } catch (error) {
-          pixi.ticker.stop();
-          console.error("[Live2D] render gagal, ticker dihentikan", error);
-        }
-      });
       host.appendChild(pixi.view as HTMLCanvasElement);
 
-      const model = new live2dModule.Live2DModel({ autoInteract: false });
+      // autoUpdate is off on purpose: it would bind the model to Ticker.shared, which
+      // nothing in this app starts, so the model would load and then never paint.
+      const model = new live2dModule.Live2DModel({ autoUpdate: false, autoInteract: false });
 
       const timeout = new Promise<never>((_resolve, reject) => {
         loadTimer = setTimeout(
@@ -109,6 +108,42 @@ export function Live2DStage({ modelUrl, onFailure }: Live2DStageProps) {
       }
 
       pixi.stage.addChild(model);
+
+      // Captured while the scale is still 1. The size a live model reports already folds
+      // in its current scale, so re-reading it after each fit would compound the scale
+      // on every resize instead of recomputing from the authored size.
+      const authored = { width: model.width, height: model.height };
+
+      const fit = () => {
+        const placed = fitModelToPanel(
+          { width: host.clientWidth, height: host.clientHeight },
+          authored,
+          FIT_PADDING,
+        );
+        if (!placed) return;
+
+        model.scale.set(placed.scale);
+        model.x = placed.x;
+        model.y = placed.y;
+      };
+
+      fit();
+      observer = new ResizeObserver(fit);
+      observer.observe(host);
+
+      // Live2D draws inside update(), not from the scene graph, so the update has to be
+      // pumped from a running ticker. One clock for update and render keeps motion in step.
+      pixi.ticker.remove(pixi.render, pixi);
+      pixi.ticker.add(() => {
+        try {
+          model.update(pixi.ticker.deltaMS);
+          pixi.render();
+        } catch (error) {
+          pixi.ticker.stop();
+          console.error("[Live2D] render gagal, ticker dihentikan", error);
+        }
+      });
+
       setReady(true);
       setDetail(null);
     };
@@ -120,6 +155,7 @@ export function Live2DStage({ modelUrl, onFailure }: Live2DStageProps) {
     return () => {
       disposed = true;
       clearTimeout(loadTimer);
+      observer?.disconnect();
       // removeView also detaches the canvas and releases the WebGL context. The texture
       // cache is left alone so a StrictMode remount can reuse the same cached textures.
       app?.destroy(true, { children: true, texture: false, baseTexture: false });
