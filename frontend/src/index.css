@@ -2,6 +2,13 @@
 @import "./styles/tokens.css";
 
 /*
+ * tokens.css is token data, not markup. Left in the content scan, every primitive colour
+ * name in it (`neutral-950`, `ember-300`) reads as a utility class, which quietly re-opens
+ * the door to bypassing the semantic layer with `bg-neutral-950`.
+ */
+@source not "./styles/tokens.css";
+
+/*
  * Maps Humi semantic tokens onto short Tailwind theme names, so components read
  * `bg-panel` instead of `bg-[var(--color-surface)]`.
  *
@@ -47,6 +54,24 @@
   --font-body: var(--primitive-fontFamily-body);
   --font-mono: var(--primitive-fontFamily-mono);
 
+  /*
+   * Sizes are named by role rather than by scale step, because "16px" means something
+   * different in a chat bubble and in a panel heading. Line height rides along with each so
+   * the pairing cannot drift apart.
+   */
+  --text-caption: var(--primitive-fontSize-caption);
+  --text-caption--line-height: var(--primitive-lineHeight-caption);
+  --text-body-sm: var(--primitive-fontSize-body-sm);
+  --text-body-sm--line-height: var(--primitive-lineHeight-body-sm);
+  --text-body: var(--primitive-fontSize-body);
+  --text-body--line-height: var(--primitive-lineHeight-body);
+  --text-lead: var(--primitive-fontSize-lead);
+  --text-lead--line-height: var(--primitive-lineHeight-lead);
+  --text-title: var(--primitive-fontSize-title);
+  --text-title--line-height: var(--primitive-lineHeight-title);
+  --text-display: var(--primitive-fontSize-display);
+  --text-display--line-height: var(--primitive-lineHeight-display);
+
   /* radii */
   --radius-sm: var(--primitive-radius-sm);
   --radius-md: var(--primitive-radius-md);
@@ -56,9 +81,21 @@
   --ease-standard: var(--primitive-easing-standard);
 }
 
+@layer base {
+  html {
+    /* The @theme block already sets the families, but the body is what everything inherits
+       from, so it has to name them too. */
+    font-family: var(--primitive-fontFamily-body);
+    /* iOS Safari zooms any input under 16px on focus. Setting the root size keeps zoom-in
+       available without shrinking the composer text. */
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
 /*
- * Motion is a preference, not a setting. The avatar keeps breathing and lip syncing under
- * this query because that is information rather than decoration.
+ * Motion is a preference, not a setting. Elements opt out with `motion-safe:` rather than
+ * being stripped here, so the avatar's breathing and lip sync keep running under this query
+ * because that motion carries information rather than decoration.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
