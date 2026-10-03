@@ -402,3 +402,61 @@ periksa. Script juga selalu keluar dengan status 0, jadi tidak bisa dipakai seba
 supaya tidak ada yang mengira cakupan ladanya lebih lebar dari kenyataan. Penegakan token yang
 benar datang dari `@theme inline` di `frontend/src/index.css`, ditambah
 `frontend/src/lib/tokens.test.ts` yang menguji kontras dan kesegaran CSS hasil generate.
+
+## ENV-007 — Container frontend yang stale tidak punya port publish sama sekali
+
+**Gejala.** `curl http://localhost:5173` gagal dengan connection refused, padahal
+`docker compose ps` melaporkan service `frontend` sebagai `running`. `docker compose port
+frontend 5173` membalas `invalid IP:0`.
+
+**Akar masalah.** Container itu dibuat lebih dulu, sebelum baris `ports` masuk ke
+`docker-compose.yml`. `docker inspect` menunjukkan `PortBindings={}`, jadi tidak ada yang pernah
+dipublish ke host. `docker compose ps` tetap tidak berkomentar karena healthcheck tidak menyentuh
+port publish. Volume `humi_*` tidak ikut hilang saat `docker compose down`.
+
+**Solusi.** `make up`. Setelah itu `PortBindings={"5173/tcp":[{"HostIp":"","HostPort":"5173"}]}`
+dan `localhost:5173` balas 200. Untuk menjalankan verifikasi tanpa menyentuh stack, pakai IP container:
+`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' humi-frontend-1`.
+
+**Catatan tambahan.** Kalau `docker compose ps` keluar kosong untuk semua service Humi padahal
+`docker volume ls` masih menunjukkan `humi_frontend_node_modules` dan seterusnya, berarti
+seluruh project sudah di-`down`, bukan hanya crash. Volume menandai bahwa yang hilang cuma
+container.
+
+## TOOL-003 — Nama token primitive di CSS hasil generate jadi utility Tailwind yang sah
+
+**Gejala.** `@source not "./styles/tokens.css"` tidak ada di `index.css`, tapi CSS hasil build
+tetap punya `.bg-neutral-950{background-color:var(--color-neutral-950)}` dan
+`.text-neutral-100{...}`, padahal tidak ada satu pun berkas sumber yang memakainya.
+
+**Akar masalah.** Pemindaian konten Tailwind v4 membaca berkas CSS juga, bukan cuma markup. Nama
+variabel di `tokens.css` seperti `--primitive-color-neutral-950` dibaca sebagai kandidat nama
+kelas, dan Tailwind meneruskannya jadi utility. Efeknya lebih halus daripada ukuran CSS:
+`bg-neutral-950` jadi kelas yang sah, jadi lapisan semantic bisa dilompati tanpa
+satu pun error.
+
+**Solusi.** `@source not "./styles/tokens.css";` di `frontend/src/index.css`, ditulis setelah
+kedua baris `@import`. Terverifikasi 2026-10-03: `.bg-neutral-950` dan `.text-neutral-100` hilang
+dari CSS hasil build sementara `bg-panel`, `bg-brand`, `text-caption`, `font-display` tetap ada.
+`tokenDiscipline.test.ts` menjaga sisanya di sisi TypeScript.
+
+## TOOL-004 — Alternasi regex tanpa kurung membuat gerbang jadi ratusan false positive
+
+**Gejala.** `tokenDiscipline.test.ts` melaporkan hampir semua kata `from`, `text`, `border`, `to`,
+`accent` di seluruh `frontend/src` sebagai pelanggaran, padahal tidak ada satu pun yang memakai
+warna primitive.
+
+**Akar masalah.** Prefix ditulis sebagai string alternasi telanjang lalu dirangkai di template
+literal: `` `${COLOR_PREFIXES}-${name}` `` dengan `COLOR_PREFIXES` berisi
+`bg|text|...|shadow`. Setelah `new RegExp` merangkainya, hasilnya
+`(?:bg|text|...|shadow-neutral-950)`, jadi sufiks hanya menempel ke cabang terakhir dan setiap
+prefix sendirian jadi pola yang cocok. Karena pola itu cocok di mana-mana, satu kata bisa meledak jadi ratusan
+temuan.
+
+**Solusi.** Tulis prefix sebagai `(?:bg|text|...)`, bukan `bg|text|...`. Aturan umumnya:
+kalau satu fragmen regex dirangkai dengan string di dalam constructor `RegExp`, bungkus
+fragmen itu dengan `(?:...)` sendiri lebih dulu.
+
+**Verifikasi.** Setelah diperbaiki, gerbang kembali hijau. Bukti bahwa gerbang itu bukan vakum:
+mengganti satu `bg-current` di `TypingDots.tsx` dengan `bg-neutral-400` membuatnya gagal dengan
+pesan `components/TypingDots.tsx: bg-neutral-400`.

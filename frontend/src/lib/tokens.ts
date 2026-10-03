@@ -6,7 +6,12 @@
  * free of `node:fs` and can be imported from the browser bundle as well as from tests.
  */
 
-/** Dotted path to raw value, for example `semantic.color.ember` to `#F0555F`. */
+/**
+ * Dotted path to the resolved raw value, for example `primitive.color.ember.500`.
+ *
+ * The value is spelled without its hex form on purpose: `tokenDiscipline.test.ts` reads this
+ * file, and a literal colour in a doc comment is still a literal colour in the source tree.
+ */
 export type FlatTokens = Map<string, string>;
 
 const REFERENCE = /^\{([^}]+)\}$/;

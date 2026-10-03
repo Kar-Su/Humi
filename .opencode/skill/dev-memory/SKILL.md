@@ -73,14 +73,30 @@ Status per 2026-10-02. Semua di sini sudah dicek langsung, bukan asumsi.
    (`name: humi`), jadi `down-prod` mematikan seluruh stack, bukan cuma mode prod. Untuk balik
    ke verifikasi lokal harus `make up` lagi. Detailnya di `issues.md` bagian ENV-006.
 
+10. **Container yang dibuat sebelum baris `ports` masuk compose punya `PortBindings={}`.**
+    Gejalanya `localhost:5173` connection refused padahal `docker compose ps` bilang
+    `running`. `make up` memperbaikinya. Kalau tidak boleh menyentuh stack, pakai IP
+    container. Detailnya di `issues.md` bagian ENV-007.
+
 ## Gerbang design token
 
 Sumber kebenaran token adalah `design-system/humi/tokens.json`. Setelah mengubahnya:
 
 ```bash
 npm --prefix frontend run tokens   # regenerate frontend/src/styles/tokens.css
-npm --prefix frontend test         # kontras + kesegaran CSS hasil generate
+npm --prefix frontend test         # kontras, disiplin token, kesegaran CSS
 ```
+
+Ada dua gerbang di `npm --prefix frontend test`:
+
+| Test | Yang dijaga |
+|---|---|
+| `tokens.test.ts` | nilai token: kontras WCAG 2.2 dan kesegaran `tokens.css` hasil generate |
+| `tokenDiscipline.test.ts` | disiplin: nama primitive sebagai warna, hex literal, ukuran teks default Tailwind |
+
+`frontend/src/index.css` wajib memuat `@source not "./styles/tokens.css"`. Tanpa itu, pemindaian
+konten Tailwind membaca nama variabel di `tokens.css` dan meneruskannya jadi kelas yang sah,
+sehingga `bg-neutral-950` bisa dipakai tanpa satu pun error.
 
 `validate-tokens.cjs` dari skill `design-system` **tidak dipakai sebagai gerbang**. Script itu
 hanya menangkap hex mentah, sementara komponen Humi menulis kelas utilitas Tailwind, dan status
