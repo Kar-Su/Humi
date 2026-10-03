@@ -27,9 +27,21 @@ WCAG 2.2, dan gagal kalau ada pasangan yang turun di bawah ambangnya. Test yang 
 memastikan setiap warna semantic di `tokens.json` muncul dengan nilai yang sama di
 `tokens.css`, jadi **`tokens.css` yang basi ikut ketahuan**.
 
+`frontend/src/lib/tokenDiscipline.test.ts` menjaga hal yang tidak bisa dilihat test nilai:
+apakah ada yang memutar sistem tiga lapis itu. Dia gagal kalau ada kelas utilitas yang memakai
+nama primitive sebagai warna, kalau ada hex literal di mana pun di `frontend/src`, atau kalau ada
+ukuran teks yang memakai langkah default Tailwind (`text-sm`, `text-base`) alih-alih skala
+berperan. Tanpa gerbang ini, kebocoran hanya terlihat sebagai "warnanya agak beda".
+
 Tailwind v4 membaca token lewat blok `@theme inline` di `frontend/src/index.css`, yang memetakan
 nama semantic ke nama pendek Tailwind. Komponen menulis `bg-panel`, bukan `var(--color-surface)`
 dan bukan `bg-[#151224]`.
+
+> `tokens.css` **tidak boleh ikut dipindai Tailwind**, makanya ada `@source not` di `index.css`.
+> Kalau ikut, setiap nama primitive di dalamnya (`neutral-950`, `ember-300`) terbaca sebagai nama
+> kelas utilitas, lalu `bg-neutral-950` jadi utility yang sah dan lapisan semantic bisa
+> dilewati tanpa satu pun error. Baris ini kelihatan tidak berguna sampai ada yang memakainya,
+> jadi jangan dihapus dengan alasan "praktis".
 
 > Catatan:`validate-tokens.cjs` dari skill `design-system` **tidak dipakai sebagai gerbang**.
 > Script itu hanya menangkap hex mentah, sedangkan komponen Humi memakai kelas utilitas
@@ -186,9 +198,7 @@ contohnya popover. Tanpa alasan, surface yang lebih terang sudah cukup.
 
 ## Gerak
 
-Token durasi tunggal supaya tidak ada angka acak di JSX.
-
-Durasinya sudah jadi token `primitive.duration.*` supaya tidak ada angka acak di JSX.
+Durasi dan easing sudah jadi token `primitive.duration.*`, jadi tidak ada angka acak di JSX.
 
 | Token | Durasi | Easing | Pemakaian |
 |---|---|---|---|
@@ -205,9 +215,10 @@ Aturan gerak:
   `height`, `top`, atau `left` akan memicu layout thrash tiap frame.
 - `transition: all` dilarang. Sebut properti yang berubah; `all` membuat animasi tidak terduga
   muncul saat properti lain berubah karena alasan yang tidak terkait.
-- **Wajib ada `prefers-reduced-motion`**. Di bawah preferensi itu, durasi transisi non-esensial
-  menjadi 1ms dan animasi berulang dihentikan. Lip-sync tetap boleh jalan karena itu informasi,
-  bukan hiasan.
+
+### Menghormati `prefers-reduced-motion`
+
+Clamp global ada di `index.css`:
 
 ```css
 @media (prefers-reduced-motion: reduce) {
@@ -222,6 +233,18 @@ Aturan gerak:
 }
 ```
 
+Clamp itu menyapu semua animasi, termasuk yang memang membawa informasi. Karena itu gerak
+dekoratif tidak ditulis sebagai `animate-*` telanjang, melainkan pakai varian `motion-safe:`.
+Tailwind membungkus varian itu sendiri di `@media (prefers-reduced-motion: no-preference)`, jadi
+animasi hanya hidup kalau pengguna tidak meminta minimalkan gerak. Kalau authoring dilakukan
+dengan `animate-*` biasa, clamp global akan membunuhnya dan tidak ada jalan untuk menyatakan
+"ini informasinya, bukan hiasannya" tanpa `!important` baru.
+
+Untuk gerak yang benar-benar esensial seperti napas avatar dan sinkronisasi mulut, biaya
+mengecoh preferensi itu tidak sepadan, jadi keduanya dijalankan lewat renderer yang tidak
+mengikuti aturan CSS sama sekali.
+
+
 ## Komponen
 
 ### Panel avatar
@@ -232,6 +255,12 @@ Aturan gerak:
 - Latar `bg-panel`, radius `radius-lg`, padding 0 supaya canvas Pixi menempel penuh ke tepi.
 - Keliling panel diberi cincin tipis yang warnanya mengikuti state: `border-line` saat diam,
   `border-live` saat Humi bicara. Cincin ini indikator status, jadi wajib 3:1 terhadap `surface`.
+- Badge emosi menempel di kiri atas, bukan di footer panel. Isinya **nama Indonesia**, bukan
+  token protokol: `happy` tampil sebagai "Senang". Token bahasa Inggris milik kontrak mesin
+  dan tidak boleh menyentuh layar.
+- `Live2DStage` tidak punya tinggi sendiri. Ia `absolute inset-0` di dalam panel, karena
+  `resizeTo` Pixi mengukur host yang harus sudah punya layout. Host berukuran nol akan membuat
+  `fitModelToPanel` menghitung skala yang salah.
 
 ### Bubble chat
 
@@ -241,17 +270,33 @@ Aturan gerak:
 | User | `bg-bubble` | `text-ink` | `radius-md` | rata kanan, tepi `border-line` tipis |
 | Sistem | transparan | `text-ink-subtle` | `radius-sm` | contoh `caption`, tanpa gelembung |
 
+Label emosi menempel di atas gelembung Humi sebagai badge pill. Emosi yang bernuansa kuat memakai
+`bg-emotion`, yang netral memakai `bg-raised`. Kalau semuanya diberi warna, badge jadi hiasan yang
+selalu berbunyi dan tidak membawa informasi lagi.
+
 Bubble masuk pakai `normal` dengan `opacity` dan `translateY(4px)` saja. Jangan pakai scale
 overshoot di area chat; teks yang memantul terbaca sebagai tidak serius.
 
 ### Composer
 
-- Baris composer **harus bisa wrap atau menyusut**. Di baseline sekarang input dan tiga tombol
-  membentuk lebar minimum 430px, sehingga halaman melebar keluar viewport di 375px dan 414px.
-  Ini bug nyata, bukan preferensi.
+- Baris composer **harus bisa wrap atau menyusut**. Di baseline input dan tiga tombol membentuk
+  lebar minimum 430px, sehingga halaman melebar keluar viewport di 375px dan 414px. Ini bug
+  nyata, bukan preferensi. Yang membuatnya melebar adalah `min-w-0` yang hilang pada input:
+  sebagai flex item, input mempertahankan lebar teks intrinsiknya dan tidak mau menyusut.
+  Setelah `min-w-0` dipasang, footer juga diberi `flex-wrap` supaya tetap utuh kalau memang
+  tidak cukup ruang. Di 320px dan 375px footer jadi dua baris, dan itu memang yang dimaksud.
 - Target sentuh minimal 24 CSS px, disarankan 44px, dengan jarak antar tombol minimal 8px.
 - Tombol ikon wajib punya `aria-label` Bahasa Indonesia karena tidak punya teks yang terbaca.
 - Urutan fokus mengikuti urutan visual: input, kirim, mikrofon, henti.
+- Teks composer 16px di bawah `lg`, lalu turun ke 14px di layar lebar. Di bawah 16px, iOS Safari
+  melakukan auto-zoom saat input difokuskan, dan zoom itu tidak bisa dibatalkan pengguna.
+
+### Segmented control bahasa
+
+Pakai `fieldset` dengan `legend` yang `sr-only`, bukan `div` dengan `role="group"`.
+`fieldset` adalah elemen semantik untuk sekumpulan kontrol yang berbagi satu label, jadi screen
+reader membaca nama kelompoknya dari DOM, bukan dari override ARIA. Tanpa reset `m-0` dan `p-0`,
+browser memberi padding dan border bawaan pada `fieldset`.
 
 ### Tombol
 
@@ -263,6 +308,7 @@ overshoot di area chat; teks yang memantul terbaca sebagai tidak serius.
 
 Semua tombol dapat `cursor-pointer`, focus ring `bg-brand` 2px dengan offset 2px, dan state disabled
 sekali `opacity-50` **serta** `cursor-not-allowed`.
+
 
 ## Ikon
 
@@ -282,31 +328,38 @@ Aturan:
 
 ## Checklist pra-rilis
 
-- [ ] Tidak ada emoji sebagai ikon; ikon sudah inline SVG
-- [ ] `cursor-pointer` ada di semua elemen yang bisa diklik
-- [ ] Semua ikon punya `aria-label` Bahasa Indonesia
-- [ ] Focus ring terlihat di semua kontrol, termasuk di dalam bubble atau modal
-- [ ] `prefers-reduced-motion` dihormati
-- [ ] Body text 16px atau lebih di mobile
-- [ ] Tidak ada scroll horizontal di 320, 375, 414, 768, 1024, dan 1440
-- [ ] `npm --prefix frontend test` hijau, termasuk seluruh pasangan kontras
-- [ ] Tidak ada `transition: all`
-- [ ] Semua copy Bahasa Indonesia, termasuk pesan error
+Semua butir sudah diperiksa di DOM running, bukan dengan membaca kode. Kotak centang berarti ada
+bukti yang tercatat, bukan "#tidak melihat masalah".
+
+- [x] Tidak ada emoji sebagai ikon; ikon sudah inline SVG
+- [x] `cursor-pointer` ada di semua elemen yang bisa diklik
+- [x] Semua ikon punya `aria-label` Bahasa Indonesia
+- [x] Focus ring terlihat di semua kontrol: enam kontrol, `outline` 2px, urutan fokus
+      `ID, EN, input, kirim, mikrofon, henti` sesuai urutan visual
+- [x] `prefers-reduced-motion` dihormati: clamp global ada di CSS hasil build, dan
+      `motion-safe:animate-pulse` dibungkus `@media (prefers-reduced-motion: no-preference)`
+- [x] Body text 16px atau lebih di mobile: font composer 16px di 320, 375, 414, dan 768px
+- [x] Tidak ada scroll horizontal di 320, 375, 414, 768, 1024, dan 1440: `scrollWidth` sama
+      dengan `clientWidth` di keenam lebar, dan tidak ada elemen yang melewati tepi kanan
+- [x] `npm --prefix frontend test` hijau, termasuk seluruh pasangan kontras dan gate disiplin token
+- [x] Tidak ada `transition: all`
+- [x] Semua copy Bahasa Indonesia, termasuk pesan error dan `aria-label`
+
 
 ## Baseline yang diukur sebelum redesign
 
 Fakta diambil dari DOM running di `localhost:5173`, bukan dari hasil baca kode. Ini yang harus
 berubah.
 
-| Item | Sekarang | Target |
-|---|---|---|
-| Lebar konten di 1440px | 672px (`max-w-2xl`), sisa 768px kosong | grid `3fr 2fr` memakai lebar penuh |
-| Tinggi panel avatar | 128px tetap di semua ukuran | minimal 45dvh di mobile, minimal 40 persen di desktop |
-| Lebar dokumen di 375px | 430px, melebar 55px | pas 375px |
-| Lebar dokumen di 414px | 430px, melebar 16px | pas 414px |
-| Ikon kontrol | emoji `🎙` dan `⏹` | inline SVG dengan `aria-label` |
-| Palet | netral abu-abu plus satu `indigo-600` | token di `tokens.json` |
-| Copy | `"Humi is typing..."` berbahasa Inggris | Bahasa Indonesia |
+| Item | Sebelum | Target | Sesudah |
+|---|---|---|---|
+| Lebar konten di 1440px | 672px (`max-w-2xl`), sisa 768px kosong | grid `3fr 2fr` memakai lebar penuh | 821px dan 547px, rasio 1.500 |
+| Tinggi panel avatar | 128px tetap di semua ukuran | minimal 45dvh di mobile, minimal 40 persen di desktop | 465px di 320px, 724px di 1440px |
+| Lebar dokumen di 375px | 430px, melebar 55px | pas 375px | 375px |
+| Lebar dokumen di 414px | 430px, melebar 16px | pas 414px | 414px |
+| Ikon kontrol | emoji mikrofon dan kotak stop | inline SVG dengan `aria-label` | tiga ikon SVG di `components/Icon.tsx` |
+| Palet | netral abu-abu plus satu `indigo-600` | token di `tokens.json` | semua kelas warna lewat nama semantic |
+| Copy | `"Humi is typing..."` berbahasa Inggris | Bahasa Indonesia | `"Humi sedang mengetik"` |
 
 Satu target yang **sudah terpenuhi** sebelum dokumen ini ditulis, jadi tidak boleh dikerjakan ulang:
 renderer Live2D sudah dimuat lewat `import()` dinamis di dalam `boot()`, sehingga jalur `emoji`

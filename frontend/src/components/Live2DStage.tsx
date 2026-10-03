@@ -163,12 +163,14 @@ export function Live2DStage({ modelUrl, onFailure }: Live2DStageProps) {
     };
   }, [modelUrl]);
 
+  // No height of its own: the parent panel owns the box, and Pixi's resizeTo needs a host
+  // that is already laid out or fitModelToPanel measures zero.
   return (
-    <div className="relative h-32 w-full overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/60">
+    <div className="absolute inset-0">
       <div ref={hostRef} className="h-full w-full" />
       {!ready && (
-        <p className="absolute inset-x-2 bottom-2 text-center text-xs text-neutral-400">
-          {detail ?? "memuat avatar Live2D..."}
+        <p className="absolute inset-x-3 bottom-3 rounded-sm bg-canvas/80 px-3 py-2 text-center text-caption text-ink-muted backdrop-blur-sm">
+          {detail ?? "Memuat avatar Live2D..."}
         </p>
       )}
     </div>
