@@ -75,7 +75,19 @@ Harus berada di area folder masing-masing.
 |---|---|
 | Go | `go test ./...` · `go vet ./...` · `golangci-lint run` (config `.golangci.yml`, wajib golangci-lint v2) |
 | Python | `uv run ruff check .` di `ai-service/` (config `pyproject.toml`, lockfile `uv.lock` wajib dikomit) |
-| TS/React | `npm run lint` (Biome) · `npx tsc --noEmit` di `frontend/` |
+| TS/React | `npm run lint` (Biome) · `npx tsc --noEmit` · `npm test` di `frontend/` |
+
+`npm test` di `frontend/` menjalankan `node --test` tanpa dependency tambahan, dan sudah
+menyertakan dua gerbang design token:
+
+- `tokens.test.ts` menghitung kontras WCAG 2.2 dan memastikan `frontend/src/styles/tokens.css`
+  sinkron dengan `design-system/humi/tokens.json`.
+- `tokenDiscipline.test.ts` gagal kalau ada kelas utilitas yang memakai nama primitive sebagai
+  warna, ada hex literal di `frontend/src`, atau ada ukuran teks yang memakai langkah default
+  Tailwind alih-alih skala berperan (`text-body`, bukan `text-sm`).
+
+Jadi komponen tidak boleh menulis warna atau ukuran font langsung. Ubah `tokens.json`, lalu
+`npm --prefix frontend run tokens`.
 
 Aturan: logika murni (parser protokol, builder prompt persona, pemotong kalimat) WAJIB punya unit
 test; wrapper I/O (klien Ollama/whisper/TTS) cukup diuji lewat benchmark-id. Test dieksekusi di host,
@@ -138,6 +150,9 @@ sama. Temuan baru wajib ditambahkan kembali ke `issues.md`.
 
 - `docs/architecture.md` — keputusan arsitektur & justifikasinya (hasil brainstorming).
 - `docs/roadmap.md` — Fase 0–3 beserta gerbang keputusan.
+- `design-system/humi/tokens.json` — **sumber kebenaran** semua token frontend. Ubah di sini,
+  lalu `npm --prefix frontend run tokens`. Jangan menulis hex atau ukuran font langsung di komponen.
+- `design-system/humi/MASTER.md` — rasional desain (batasan keras, alasan tiap token).
 - Skills (dimuat otomatis saat relevan): `dev-memory`, `dev-workflow`, `protocol-contract`,
   `benchmark-id`, `model-ops`, `persona-prompting`, `avatar-frontend`, `ui-ux-pro-max`,
   `design-system`, `ui-styling`.

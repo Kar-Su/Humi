@@ -291,3 +291,172 @@ dan jangan menambahkan negasi lain di bawah `.plan/`.
 **Sisa risiko.** Pelindungan ini lokal. Clone baru tidak punya entri di `.git/info/exclude`, jadi
 `.plan/stored-plan.md` akan terbaca sebagai berkas baru. Karena itu `git add -A` tetap perlu
 dicek dengan `git status` sebelum commit.
+
+---
+
+## ENV-006 — `make down-prod` mematikan seluruh stack, bukan hanya mode prod
+
+**Gejala.** Setelah `make down-prod`, `localhost:5173` dan `localhost:8080` balas `000` padahal
+override prod sudah tidak aktif. Upaya mengikuti langkah ENV-001 dengan `make up` juga tidak
+mengembalikan apa-apa kalau tidak dijalankan sampai habis.
+
+**Akar masalah.** `down` dan `down-prod` di `Makefile` memakai project compose yang sama, yaitu
+`name: humi` di `docker-compose.yml`. `down-prod` hanya menambah `-f docker-compose.prod.yml` ke
+baris yang sama, dan `docker compose down` menghentikan seluruh service di project itu,
+termasuk yang tidak ada di override prod.
+
+**Solusi.** Perlakukan `down-prod` sebagai `down`, bukan sebagai "kembali ke mode dev". Untuk
+balik ke verifikasi lokal, jalankan `make up` setelahnya dan tunggu `frontend` balas 200 sebelum
+screenshot.
+
+---
+
+## DOC-002 — Kata Indonesia rusak dan karakter CJK muncul lagi di dokumen panjang
+
+**Gejala.** Ini berulang tiga kali dalam satu sesi, di tiga berkas berbeda. Yang muncul bukan
+hanya karakter CJK utuh seperti pada DOC-001, tapi juga kata bercampur huruf asing di tengah,
+misalnya `MEXCOS`, `spasibased`, `salingFERENCE`, `WajibILA`, dan `heightNYA`. Kata yang
+ditulis benar seperti `Ringkasnya:` pun bisa kehilangan huruf dan menyisipkan dua karakter
+CJK, jadi sebutan di contoh ini sengaja ditulis ulang tanpa huruf CJK-nya sendiri supaya
+pemeriksa karakter di bawah tidak terus menemukan dirinya sendiri.
+
+**Akar masalah.** Menyunting kalimat panjang secara berulang sambil menyalin dari konteks
+sebelumnya memasukkan fragmen dari sumber lain. Gejalanya muncul justru pada kalimat yang sedang
+dirapikan, misalnya `{-nya}` dan `yaitu_chain_`.
+
+**Solusi yang terbukti andal.** Scan per baris sambil menyimpan nomor baris, lalu perbaiki pakai
+nomor baris, bukan mencocokkan string panjang:
+
+```python
+in_fence = False
+for i, line in enumerate(t.split("\n"), 1):
+    if line.strip().startswith("```"):
+        in_fence = not in_fence
+        continue
+    if in_fence:
+        continue
+    if any(ord(c) > 0x2FFF for c in line):
+        report.append(i)
+```
+
+Blok kode dilewati karena CSS dan token memang memakai karakter di luar rentang Latin.
+
+Emoji **boleh** muncul kalau sedang mengutip bukti kondisi saat ini, misalnya ikon `🎙` yang
+dipakai `frontend/src/App.tsx` sekarang dan akan diganti inline SVG. Kalau onboard tidak sedang
+membaca ulang kode yang relevan, perlakukan emoji sebagai temuan dan perbaiki.
+
+**Tiga jebakan alat yang memakan waktu lebih lama daripada masalahnya.**
+
+1. `rg -n '"\$value"'` tidak pernah cocok. Di regex, `$` adalah anchor akhir baris, bukan
+   karakter dolar. Pakai `rg -Fn` untuk pencarian literal.
+2. `python3` dengan `'"\$value":'` juga tidak cocok. Di Python, `"\$"` adalah dua karakter yaitu
+   `\` dan `$`, bukan satu karakter dolar.
+3. Menulis `\uXXXX` langsung di dalam heredoc shell sering salah ketik dan hasilnya nol match.
+   Batas rentang CJK lebih aman ditulis sebagai `0x2FFF` di Python.
+
+---
+
+## TOOL-001 — Biome menolak komentar di `biome.json`, dan formatter merusak berkas hasil generate
+
+**Gejala.** Dua masalah muncul berurutan saat menambahkan blok `@theme` Tailwind v4.
+
+1. `lint/complexity/noImportantStyles` muncul di blok `prefers-reduced-motion`. Mematikannya lewat
+   `overrides` gagal karena `biome.json` diparse sebagai JSON strict.
+2. Setelah `overrides` berhasil, test kontras gagal karena `frontend/src/styles/tokens.css` tidak
+   lagi sama dengan hasil generator.
+
+**Akar masalah.**
+
+1. Komentar hanya sah di `biome.jsonc`. Saat `biome.json` gagal di-deserialize, Biome jatuh ke
+   konfigurasi default dan ikut memindai 68 file, sehingga memunculkan 17973 error palsu.
+2. `biome format --write` menormalkan huruf besar hex dari `#0B0912` menjadi `#0b0912`, sedangkan
+   test membandingkan nilai token apa adanya. Berkas hasil generate seharusnya tidak pernah
+   disentuh formatter.
+
+**Solusi.** Rename `biome.json` menjadi `biome.jsonc` supaya bisa diberi komentar, aktifkan parser
+Tailwind, lalu kecualikan hanya berkas hasil generate:
+
+```jsonc
+"files": {
+  "includes": ["src/**/*", "!src/styles/tokens.css", "biome.jsonc"]
+},
+"css": { "parser": { "tailwindDirectives": true } }
+```
+
+Kecualikan berkas yang generated saja. CSS tangan di `src/styles/` tetap harus diformat, jadi
+jangan mengecualikan seluruh folder.
+
+---
+
+## TOOL-002 — `validate-tokens.cjs` dari skill `design-system` hanya menangkap hex mentah
+
+**Gejala.** Script itu melaporkan 14 pelanggaran, semuanya di `frontend/src/lib/tokens.test.ts`,
+dan nol di `App.tsx` padahal `App.tsx` masih memakai `indigo-600` dan `neutral-900` yang bukan
+token Humi.
+
+**Akar masalah.** Script hanya mencari literal `#RRGGBB` di dalam source. Komponen Humi menulis
+kelas utilitas Tailwind, dan nama kelas seperti `indigo-600` bukan hex sehingga lolos tanpa
+periksa. Script juga selalu keluar dengan status 0, jadi tidak bisa dipakai sebagai gerbang.
+
+**Solusi.** Jangan jadikan ini gerbang CI, dan catat keterbatasannya di dokumen design system
+supaya tidak ada yang mengira cakupan ladanya lebih lebar dari kenyataan. Penegakan token yang
+benar datang dari `@theme inline` di `frontend/src/index.css`, ditambah
+`frontend/src/lib/tokens.test.ts` yang menguji kontras dan kesegaran CSS hasil generate.
+
+## ENV-007 — Container frontend yang stale tidak punya port publish sama sekali
+
+**Gejala.** `curl http://localhost:5173` gagal dengan connection refused, padahal
+`docker compose ps` melaporkan service `frontend` sebagai `running`. `docker compose port
+frontend 5173` membalas `invalid IP:0`.
+
+**Akar masalah.** Container itu dibuat lebih dulu, sebelum baris `ports` masuk ke
+`docker-compose.yml`. `docker inspect` menunjukkan `PortBindings={}`, jadi tidak ada yang pernah
+dipublish ke host. `docker compose ps` tetap tidak berkomentar karena healthcheck tidak menyentuh
+port publish. Volume `humi_*` tidak ikut hilang saat `docker compose down`.
+
+**Solusi.** `make up`. Setelah itu `PortBindings={"5173/tcp":[{"HostIp":"","HostPort":"5173"}]}`
+dan `localhost:5173` balas 200. Untuk menjalankan verifikasi tanpa menyentuh stack, pakai IP container:
+`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' humi-frontend-1`.
+
+**Catatan tambahan.** Kalau `docker compose ps` keluar kosong untuk semua service Humi padahal
+`docker volume ls` masih menunjukkan `humi_frontend_node_modules` dan seterusnya, berarti
+seluruh project sudah di-`down`, bukan hanya crash. Volume menandai bahwa yang hilang cuma
+container.
+
+## TOOL-003 — Nama token primitive di CSS hasil generate jadi utility Tailwind yang sah
+
+**Gejala.** `@source not "./styles/tokens.css"` tidak ada di `index.css`, tapi CSS hasil build
+tetap punya `.bg-neutral-950{background-color:var(--color-neutral-950)}` dan
+`.text-neutral-100{...}`, padahal tidak ada satu pun berkas sumber yang memakainya.
+
+**Akar masalah.** Pemindaian konten Tailwind v4 membaca berkas CSS juga, bukan cuma markup. Nama
+variabel di `tokens.css` seperti `--primitive-color-neutral-950` dibaca sebagai kandidat nama
+kelas, dan Tailwind meneruskannya jadi utility. Efeknya lebih halus daripada ukuran CSS:
+`bg-neutral-950` jadi kelas yang sah, jadi lapisan semantic bisa dilompati tanpa
+satu pun error.
+
+**Solusi.** `@source not "./styles/tokens.css";` di `frontend/src/index.css`, ditulis setelah
+kedua baris `@import`. Terverifikasi 2026-10-03: `.bg-neutral-950` dan `.text-neutral-100` hilang
+dari CSS hasil build sementara `bg-panel`, `bg-brand`, `text-caption`, `font-display` tetap ada.
+`tokenDiscipline.test.ts` menjaga sisanya di sisi TypeScript.
+
+## TOOL-004 — Alternasi regex tanpa kurung membuat gerbang jadi ratusan false positive
+
+**Gejala.** `tokenDiscipline.test.ts` melaporkan hampir semua kata `from`, `text`, `border`, `to`,
+`accent` di seluruh `frontend/src` sebagai pelanggaran, padahal tidak ada satu pun yang memakai
+warna primitive.
+
+**Akar masalah.** Prefix ditulis sebagai string alternasi telanjang lalu dirangkai di template
+literal: `` `${COLOR_PREFIXES}-${name}` `` dengan `COLOR_PREFIXES` berisi
+`bg|text|...|shadow`. Setelah `new RegExp` merangkainya, hasilnya
+`(?:bg|text|...|shadow-neutral-950)`, jadi sufiks hanya menempel ke cabang terakhir dan setiap
+prefix sendirian jadi pola yang cocok. Karena pola itu cocok di mana-mana, satu kata bisa meledak jadi ratusan
+temuan.
+
+**Solusi.** Tulis prefix sebagai `(?:bg|text|...)`, bukan `bg|text|...`. Aturan umumnya:
+kalau satu fragmen regex dirangkai dengan string di dalam constructor `RegExp`, bungkus
+fragmen itu dengan `(?:...)` sendiri lebih dulu.
+
+**Verifikasi.** Setelah diperbaiki, gerbang kembali hijau. Bukti bahwa gerbang itu bukan vakum:
+mengganti satu `bg-current` di `TypingDots.tsx` dengan `bg-neutral-400` membuatnya gagal dengan
+pesan `components/TypingDots.tsx: bg-neutral-400`.

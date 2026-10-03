@@ -1,11 +1,22 @@
+/**
+ * Transient error notices.
+ *
+ * `role="alert"` because these report a failed send or a dropped socket, and interrupting the
+ * screen reader is the point. The container is `aria-live="polite"` rather than assertive
+ * because several toasts can appear together on reconnect.
+ */
 export function Toast({ items }: { items: { id: number; text: string }[] }) {
   if (items.length === 0) return null;
   return (
-    <div className="pointer-events-none fixed top-4 right-4 z-50 flex flex-col gap-2">
+    <div
+      className="pointer-events-none fixed top-3 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col gap-2 sm:top-4 sm:right-4"
+      aria-live="polite"
+    >
       {items.map((x) => (
         <div
           key={x.id}
-          className="max-w-sm rounded-lg border border-red-800 bg-red-900/90 px-4 py-2 text-sm text-red-100 shadow-lg backdrop-blur"
+          role="alert"
+          className="pointer-events-auto rounded-md border border-bad/40 bg-bad px-4 py-2.5 text-body-sm text-canvas shadow-lg"
         >
           {x.text}
         </div>

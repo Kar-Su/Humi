@@ -1,21 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AvatarCanvas } from "./components/AvatarCanvas";
+import { Icon } from "./components/Icon";
 import { Toast } from "./components/Toast";
+import { TypingDots } from "./components/TypingDots";
 import { useAudioQueue } from "./hooks/useAudioQueue";
 import { useMicCapture } from "./hooks/useMicCapture";
 import { useToast } from "./hooks/useToast";
+import { emotionLabel, isEmphasised } from "./lib/emotionLabel";
 import type { Emotion, Outbound } from "./lib/protocol";
 
 type Status = "menyambung" | "terhubung" | "terputus";
 type Pesan =
   | { id: number; kind: "user"; teks: string }
-  | { id: number; kind: "ai"; teks: string; emotion: string };
+  | { id: number; kind: "ai"; teks: string; emotion: Emotion };
 
-const gayaStatus: Record<Status, string> = {
-  menyambung: "bg-yellow-500/20 text-yellow-300",
-  terhubung: "bg-green-500/20 text-green-300",
-  terputus: "bg-red-500/20 text-red-300",
+/** Status pill: dot plus label, so the state is not carried by colour alone. */
+const gayaStatus: Record<Status, { pill: string; dot: string; label: string }> = {
+  menyambung: {
+    pill: "bg-warn/10 text-warn",
+    dot: "bg-warn",
+    label: "Menyambung",
+  },
+  terhubung: {
+    pill: "bg-ok/10 text-ok",
+    dot: "bg-ok",
+    label: "Terhubung",
+  },
+  terputus: {
+    pill: "bg-bad/10 text-bad",
+    dot: "bg-bad",
+    label: "Terputus",
+  },
 };
+
+/** Focus ring shared by every control, so keyboard order is visible on all of them. */
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 export default function App() {
   const [status, setStatus] = useState<Status>("menyambung");
@@ -341,100 +360,138 @@ export default function App() {
     mic.stop();
   };
 
+  const statusGaya = gayaStatus[status];
+  const terhubung = status === "terhubung";
+
   return (
-    <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
+    <main className="grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-3 bg-canvas p-3 text-ink sm:gap-4 sm:p-4 lg:grid-cols-[3fr_2fr] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-6 lg:p-6">
       <Toast items={toast.items} />
-      <header className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Humi {aq.isSpeaking ? "🔊" : ""}</h1>
+
+      <header className="flex items-center justify-between gap-3 lg:col-span-2">
+        <h1 className="flex items-center gap-2 font-display text-title font-semibold">
+          Humi
+          {aq.isSpeaking && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-caption font-medium text-live-ink"
+              role="status"
+            >
+              <span className="size-1.5 rounded-full bg-live-ink motion-safe:animate-pulse" />
+              Bicara
+            </span>
+          )}
+        </h1>
+
         <div className="flex items-center gap-2">
-          <div className="flex rounded-full border border-neutral-700 p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setLang("id")}
-              className={`rounded-full px-3 py-1 ${lang === "id" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
-            >
-              ID
-            </button>
-            <button
-              type="button"
-              onClick={() => setLang("en")}
-              className={`rounded-full px-3 py-1 ${lang === "en" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
-            >
-              EN
-            </button>
-          </div>
-          <span className={`rounded-full px-3 py-1 text-xs ${gayaStatus[status]}`}>
-            WS: {status}
+          {/* fieldset rather than role="group": it is the semantic element for a set of
+              related controls sharing one label, so screen readers announce the group name
+              from the DOM instead of from an ARIA override. */}
+          <fieldset className="m-0 flex rounded-full border border-edge p-0.5">
+            <legend className="sr-only">Bahasa jawaban Humi</legend>
+            {(["id", "en"] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLang(code)}
+                aria-pressed={lang === code}
+                className={`cursor-pointer rounded-full px-3 py-1 text-caption font-medium uppercase transition-colors duration-150 ${FOCUS} ${
+                  lang === code ? "bg-brand text-brand-ink" : "text-ink-subtle hover:text-ink"
+                }`}
+              >
+                {code}
+              </button>
+            ))}
+          </fieldset>
+
+          <span
+            className={`flex items-center gap-2 rounded-full px-3 py-1 text-caption font-medium ${statusGaya.pill}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className={`size-2 rounded-full ${statusGaya.dot}`} aria-hidden="true" />
+            {statusGaya.label}
           </span>
         </div>
       </header>
 
-      <AvatarCanvas emotion={emotion} analyser={aq.analyser} />
+      <AvatarCanvas emotion={emotion} analyser={aq.analyser} speaking={aq.isSpeaking} />
 
       <section
         ref={sectionRef as unknown as React.RefObject<HTMLDivElement>}
-        className="flex-1 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900/60 p-4"
+        aria-label="Riwayat percakapan"
+        aria-live="polite"
+        className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-panel"
       >
         {pesan.length === 0 ? (
-          <p className="text-sm text-neutral-500">
-            Fase C - ketik atau tahan 🎙 untuk bicara. Audio TTS streaming per kalimat.
+          <p className="px-4 py-4 text-body-sm text-ink-subtle">
+            Ketik pesan di bawah, atau tahan tombol mikrofon untuk bicara. Suara Humi mengalir per
+            kalimat, jadi responsnya mulai terdengar sebelum kalimat selesai.
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
             {pesan.map((p) =>
               p.kind === "user" ? (
-                <li
-                  key={p.id}
-                  className="ml-10 rounded-lg bg-indigo-700 px-3 py-2 text-sm text-white"
-                >
-                  {p.teks}
+                <li key={p.id} className="flex justify-end">
+                  <span className="max-w-[75ch] rounded-md rounded-tr-sm border border-line bg-bubble px-3.5 py-2.5 text-body text-ink">
+                    {p.teks}
+                  </span>
                 </li>
               ) : (
-                <li key={p.id} className="mr-10 rounded-lg bg-neutral-800 px-3 py-2 text-sm">
-                  <span className="text-[11px] text-neutral-500">{p.emotion}</span> {p.teks}
+                <li key={p.id} className="flex flex-col items-start gap-1">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-caption ${
+                      isEmphasised(p.emotion)
+                        ? "bg-emotion text-emotion-ink"
+                        : "bg-raised text-ink-subtle"
+                    }`}
+                  >
+                    {emotionLabel(p.emotion)}
+                  </span>
+                  <span className="max-w-[75ch] rounded-md rounded-tl-sm bg-raised px-3.5 py-2.5 text-body text-ink">
+                    {p.teks}
+                  </span>
                 </li>
               ),
             )}
             {isHumiTyping && (
-              <li className="mr-10 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
-                <span className="inline-flex gap-0.5">
-                  <span className="animate-bounce">.</span>
-                  <span className="animate-bounce [animation-delay:120ms]">.</span>
-                  <span className="animate-bounce [animation-delay:240ms]">.</span>
-                </span>
-                Humi is typing...
+              <li className="flex items-center gap-2 self-start rounded-md rounded-tl-sm bg-raised px-3.5 py-2.5 text-body-sm text-ink-subtle">
+                <TypingDots />
+                Humi sedang mengetik
               </li>
             )}
           </ul>
         )}
         {pesan.length === 0 && isHumiTyping && (
-          <div className="mt-2 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
-            <span className="inline-flex gap-0.5">
-              <span className="animate-bounce">.</span>
-              <span className="animate-bounce [animation-delay:120ms]">.</span>
-              <span className="animate-bounce [animation-delay:240ms]">.</span>
-            </span>
-            Humi is typing...
+          <div className="m-4 mt-0 flex items-center gap-2 self-start rounded-md rounded-tl-sm bg-raised px-3.5 py-2.5 text-body-sm text-ink-subtle">
+            <TypingDots />
+            Humi sedang mengetik
           </div>
         )}
       </section>
 
-      <footer className="flex gap-2">
+      {/* min-w-0 on the input is what lets the row shrink. Without it the flex item keeps
+          its intrinsic text width and the whole document overflows narrow viewports. */}
+      <footer className="flex flex-wrap items-center gap-2 lg:col-span-2">
+        <label htmlFor="composer" className="sr-only">
+          Tulis pesan untuk Humi
+        </label>
         <input
+          id="composer"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && kirim()}
-          placeholder={status === "terhubung" ? "Tulis pesan…" : "Menunggu koneksi…"}
-          disabled={status !== "terhubung"}
-          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-neutral-500 disabled:opacity-50"
+          placeholder={terhubung ? "Tulis pesan..." : "Menunggu koneksi..."}
+          disabled={!terhubung}
+          className={`min-w-[12rem] flex-1 rounded-sm border border-edge bg-panel px-3.5 py-3 text-body text-ink transition-colors duration-150 placeholder:text-ink-subtle disabled:cursor-not-allowed disabled:opacity-50 lg:text-body-sm ${FOCUS}`}
         />
         <button
           type="button"
           onClick={kirim}
-          disabled={status !== "terhubung"}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          disabled={!terhubung}
+          aria-label="Kirim pesan"
+          className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 font-medium text-brand-ink transition-colors duration-150 hover:bg-brand-hover active:bg-brand-active disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`}
         >
-          Kirim
+          <Icon name="send" />
+          <span className="hidden sm:inline">Kirim</span>
         </button>
         <button
           type="button"
@@ -449,20 +506,25 @@ export default function App() {
             e.preventDefault();
             selesaiRec();
           }}
-          disabled={status !== "terhubung"}
-          className={`rounded-lg px-3 py-2 text-sm disabled:opacity-50 ${rec ? "bg-red-600 text-white" : "border border-neutral-700"}`}
-          title="Tahan untuk bicara"
+          disabled={!terhubung}
+          aria-pressed={rec}
+          aria-label={rec ? "Hentikan rekaman" : "Tahan untuk bicara"}
+          className={`inline-flex cursor-pointer items-center justify-center rounded-md px-3.5 py-3 transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS} ${
+            rec
+              ? "bg-brand text-brand-ink"
+              : "border border-edge bg-transparent text-ink hover:bg-raised"
+          }`}
         >
-          🎙
+          <Icon name={rec ? "stop" : "mic"} />
         </button>
         <button
           type="button"
           onClick={interupsi}
-          disabled={status !== "terhubung"}
-          className="rounded-lg border border-neutral-700 px-3 py-2 text-sm disabled:opacity-50"
-          title="Interupsi turn berjalan"
+          disabled={!terhubung}
+          aria-label="Hentikan jawaban Humi sekarang"
+          className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-edge bg-transparent px-3.5 py-3 text-ink transition-colors duration-150 hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`}
         >
-          ⏹
+          <Icon name="stop" />
         </button>
       </footer>
     </main>
